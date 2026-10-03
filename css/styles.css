@@ -291,3 +291,18 @@ select {
 .shop-group { margin-bottom: 10px; }
 .shop-group h4 { margin-top: 0; }
 .shop-group ul { margin: 2px 0; padding-left: 18px; font-size: 13.5px; }
+.center { text-align: center; }
+.mins { font-size: 11.5px; font-weight: 650; color: var(--accent); white-space: nowrap; }
+.daily-day { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 4px; }
+.daily-day:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
+.dd-head { display: flex; justify-content: space-between; align-items: baseline; }
+.daily-day .checks li:first-child { border-top: 0; }
+.nudge { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.to-buy { background: var(--accent-soft); border-radius: 8px; padding: 8px 10px; margin: 8px 0; font-size: 13.5px; }
+.daily-day > summary { padding: 6px 0; }
+.daily-day > summary b::before { content: "▸ "; color: var(--muted); }
+.daily-day[open] > summary b::before { content: "▾ "; }
+.fold > summary.card-head { margin-bottom: 0; }
+.fold[open] > summary.card-head { margin-bottom: 8px; }
+.fold > summary h2::before { content: "▸ "; color: var(--muted); }
+.fold[open] > summary h2::before { content: "▾ "; }

@@ -50,9 +50,10 @@ const CHECKLIST_GROUPS = [
     items: [
       { id: "prepTomorrow", label: "Tomorrow's lunch is prepped", hint: "Box it the night before" },
       { id: "boiledEggs", label: "Boiled eggs ready in the fridge", hint: "Keep 4–6 eggs; they last 5–7 days" },
-      { id: "batchCook", label: "Batch base cooked (dal / chana / quinoa / millet)", hint: "Cook once, eat 3 days" },
+      { id: "batchCook", label: "Batch base cooked (dal / chana / quinoa / millet)", hint: "Big prep on Friday & Sunday" },
       { id: "vegChopped", label: "Veg washed & chopped", hint: "Makes stir-fries a 10-minute job" },
       { id: "snackPacked", label: "Healthy snack packed for the day", hint: "Roasted chana, nuts, fruit, yogurt" },
+      { id: "dailyPrep", label: "15-min prep for tomorrow done", hint: "See Plan → Prep for today's list" },
     ],
   },
 ];
@@ -283,21 +284,65 @@ const WORKOUTS = [
   },
 ];
 
-// Batch-prep tasks, triggered when a planned meal's name matches `match`.
-// Order here is the order they appear in the prep list.
+// ---------- Meal prep ----------
+// Big batch-prep days (0 = Sunday … 6 = Saturday). Each session covers its own
+// day through the day before the next session: Sun → Sun–Thu, Fri → Fri–Sat.
+const PREP_DAYS = [0, 5];
+const DAILY_PREP_MINUTES = 15;
+
+// Batch tasks for a big prep session, triggered when a planned meal in the
+// covered days matches `match`. `soak` adds a 5-min soak task the night before.
 const PREP_RULES = [
-  { id: "eggs", match: /egg|bhurji|omelette|shakshuka/i, task: "Boil eggs for the fridge", when: "Sun + Wed", detail: "Keep 6 peeled eggs ready; 5–7 days in the fridge" },
-  { id: "pulses", match: /rajma|chole|chickpea|chana|hummus|sprouts/i, task: "Soak & pressure-cook chickpeas / rajma", when: "Sat night soak, Sun cook", detail: "Cook a big batch; portion into boxes or freeze" },
-  { id: "dal", match: /dal|lentil|khichdi|sambar|masoor/i, task: "Cook a pot of dal / lentil soup", when: "Sun + Wed", detail: "4 portions keep 3–4 days" },
-  { id: "chilla", match: /chilla/i, task: "Soak moong dal & grind chilla batter", when: "Night before", detail: "Batter keeps 2 days in the fridge" },
-  { id: "grains", match: /quinoa|millet|upma|rice|ragi|bowl|khichdi|roti/i, task: "Cook a batch of quinoa / millet", when: "Sun", detail: "Cool fast, refrigerate up to 4 days" },
-  { id: "oats", match: /oats/i, task: "Make overnight-oats jars", when: "Sun + Wed", detail: "3 jars at a time" },
-  { id: "muffins", match: /muffin/i, task: "Bake egg muffins", when: "Sun", detail: "12 muffins = 6 breakfasts" },
-  { id: "sprouts", match: /sprouts/i, task: "Start moong sprouts", when: "2 days before", detail: "Soak 8 h, drain, keep covered" },
-  { id: "veg", match: /veg|sabzi|salad|bowl|stir|palak|spinach|curry|soup|hummus|shakshuka|upma/i, task: "Wash & chop vegetables", when: "Sun + Wed", detail: "Store in boxes lined with paper towel" },
-  { id: "paneer", match: /paneer|tofu/i, task: "Cube paneer / press tofu", when: "Sun", detail: "Keeps 3 days in water in the fridge" },
-  { id: "snacks", match: /makhana|nuts|seeds|roasted chana|walnut|almond|pumpkin/i, task: "Portion snack boxes", when: "Sun", detail: "One small box per day — no eating from the bag" },
-  { id: "dressing", match: /salad|bowl|quinoa/i, task: "Shake up a jar of dressing", when: "Sun", detail: "Lemon + olive oil + cumin; 1 week" },
+  { id: "pulses", match: /rajma|chole|chickpea|chana|hummus/i, task: "Pressure-cook chickpeas / rajma", mins: 30, soak: "Soak chickpeas / rajma tonight for tomorrow's big prep", detail: "Cook a big batch; portion into boxes or freeze" },
+  { id: "dal", match: /dal|lentil|khichdi|sambar|masoor/i, task: "Cook a pot of dal / lentil soup", mins: 30, detail: "Portions keep 3–4 days; freeze the rest" },
+  { id: "grains", match: /quinoa|millet|upma|rice|ragi|bowl|khichdi|roti/i, task: "Cook a batch of quinoa / millet", mins: 20, detail: "Cool fast, refrigerate up to 4 days" },
+  { id: "eggs", match: /egg|bhurji|omelette|shakshuka/i, task: "Boil eggs for the fridge", mins: 15, detail: "Keep 6 peeled eggs ready; 5–7 days in the fridge" },
+  { id: "muffins", match: /muffin/i, task: "Bake egg muffins", mins: 30, detail: "12 muffins = 6 breakfasts" },
+  { id: "veg", match: /veg|sabzi|salad|bowl|stir|palak|spinach|curry|soup|hummus|shakshuka|upma/i, task: "Wash & chop vegetables", mins: 20, detail: "Store in boxes lined with paper towel" },
+  { id: "paneer", match: /paneer|tofu/i, task: "Cube paneer / press tofu", mins: 5, detail: "Keeps 3 days in water in the fridge" },
+  { id: "dressing", match: /salad|bowl|quinoa/i, task: "Shake up a jar of dressing", mins: 5, detail: "Lemon + olive oil + cumin; 1 week" },
+  { id: "snacks", match: /makhana|nuts|seeds|roasted chana|walnut|almond|pumpkin/i, task: "Portion snack boxes", mins: 10, detail: "One small box per day — no eating from the bag" },
+];
+
+// Key pantry ingredients for the Thursday stock check, matched against the
+// planned meals. `note` is shown next to the item (e.g. soak timing).
+const PANTRY_DAY = 4; // Thursday
+const KEY_INGREDIENTS = [
+  { name: "Chickpeas (kabuli chana)", match: /chole|chickpea|hummus/i, note: "dry: soak the night before" },
+  { name: "Rajma", match: /rajma/i, note: "dry: soak the night before" },
+  { name: "Moong dal", match: /moong|chilla|khichdi/i, note: "" },
+  { name: "Whole moong (for sprouts)", match: /sprouts/i, note: "start 2 days ahead" },
+  { name: "Masoor dal", match: /masoor|lentil/i, note: "" },
+  { name: "Toor dal", match: /sambar|dal \+ sabzi/i, note: "" },
+  { name: "Besan", match: /besan/i, note: "" },
+  { name: "Roasted chana", match: /roasted chana/i, note: "" },
+  { name: "Quinoa", match: /quinoa|buddha/i, note: "" },
+  { name: "Millets (foxtail / little / jowar)", match: /millet|upma|khichdi/i, note: "" },
+  { name: "Ragi flour", match: /ragi/i, note: "" },
+  { name: "Brown rice", match: /rice/i, note: "" },
+  { name: "Rolled oats", match: /oats/i, note: "" },
+  { name: "Chia / ground flax", match: /oats|chia|parfait|smoothie/i, note: "" },
+  { name: "Eggs", match: /egg|bhurji|omelette|shakshuka|muffin/i, note: "" },
+  { name: "Paneer", match: /paneer/i, note: "" },
+  { name: "Tofu", match: /tofu/i, note: "" },
+  { name: "Greek yogurt / curd", match: /yogurt|parfait|raita|chaas|oats|smoothie/i, note: "" },
+  { name: "Spinach / leafy greens", match: /spinach|palak|bhurji|omelette|soup|bowl|muffin/i, note: "" },
+  { name: "Tahini", match: /hummus|buddha/i, note: "" },
+  { name: "Makhana", match: /makhana/i, note: "" },
+  { name: "Mixed nuts & seeds", match: /nuts|walnut|almond|pumpkin|seeds/i, note: "" },
+  { name: "Berries (fresh or frozen)", match: /berr|parfait|smoothie/i, note: "" },
+  { name: "Whole-grain bread / millet atta", match: /sandwich|roti/i, note: "" },
+  { name: "Peanut butter (unsweetened)", match: /peanut/i, note: "" },
+];
+
+// 15-minute daily prep: small jobs done today for TOMORROW's planned meals.
+const DAILY_PREP_RULES = [
+  { id: "chilla", match: /chilla/i, task: "Soak moong dal for tomorrow's chilla", mins: 3, detail: "Grind in the morning; batter keeps 2 days" },
+  { id: "oats", match: /oats/i, task: "Set a jar of overnight oats", mins: 5, detail: "Oats + chia + flax + milk/yogurt" },
+  { id: "sprouts", match: /sprouts/i, task: "Soak / rinse moong for sprouts", mins: 2, detail: "Soak 8 h, drain, keep covered; ready in 1–2 days" },
+  { id: "chop", match: /veg|sabzi|salad|bowl|stir|curry|shakshuka|upma|khichdi|chaat/i, task: "Chop veg for tomorrow's meals", mins: 6, detail: "Top up the batch-chopped veg" },
+  { id: "thaw", match: /rajma|chole|dal|soup|sambar/i, task: "Move tomorrow's dal / beans to the fridge to thaw", mins: 1, detail: "If you froze portions" },
+  { id: "pack", match: /.*/, task: "Portion tomorrow's lunch & snack", mins: 3, detail: "Boxes ready = no impulse eating" },
 ];
 
 // Default routine per weekday (0 = Sunday).

@@ -86,6 +86,11 @@ function buildTodayStatic() {
     </details>`).join("");
   $$("#checkGroups input[type=checkbox]").forEach((c) => (c.onchange = () => update((d) => (d.checks[c.dataset.c] = c.checked))));
 
+  $("#thursdayCheck").addEventListener("change", (e) => {
+    const c = e.target.closest("[data-prep]"); if (!c) return;
+    Store.togglePrep(PREP_STORE, c.dataset.prep);
+    renderToday();
+  });
   $("#weightIn").onchange = (e) => update((d) => (d.weight = e.target.value === "" ? null : Number(e.target.value)));
   $("#notesIn").onchange = (e) => update((d) => (d.notes = e.target.value));
 }
@@ -114,6 +119,9 @@ function renderToday() {
   const score = dayScore(d, s);
   $("#scoreVal").textContent = `${score}%`;
   $("#scoreRing").style.setProperty("--p", score);
+  const thu = isToday && parseKey(currentKey).getDay() === PANTRY_DAY;
+  $("#thursdayCard").hidden = !thu;
+  if (thu) renderPantry($("#thursdayCheck"), $("#thuMeta"));
   const mealsDone = MEALS.filter((m) => d.meals[m.id].trim()).length;
   const checksDone = ALL_CHECK_IDS.filter((id) => d.checks[id]).length;
   $("#progressList").innerHTML = [
@@ -492,41 +500,93 @@ function renderWeek() {
 }
 
 // ---------- prep & shopping ----------
-function weekPlanItems() {
-  return weekKeys().flatMap((k) => {
-    const d = Store.day(k);
-    return MEALS.map((m) => ({ k, slot: m.id, opt: plannedMeal(k, d, m.id) }));
-  });
-}
+const PREP_STORE = "all"; // task ids carry their own dates
 function dayAbbr(k) { return parseKey(k).toLocaleDateString(undefined, { weekday: "short" }); }
+function dayLong(k) { return parseKey(k).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }); }
+function isPrepDay(k) { return PREP_DAYS.includes(parseKey(k).getDay()); }
+function plannedItems(keys) {
+  return keys.flatMap((k) => { const d = Store.day(k); return MEALS.map((m) => ({ k, slot: m.id, opt: plannedMeal(k, d, m.id) })); });
+}
 
-function renderPrep() {
-  const keys = weekKeys();
-  const wk = keys[0];
-  const items = weekPlanItems().filter((x) => x.k >= todayKey() || weekOffset !== 0);
+// A session covers its own day up to the day before the next prep day.
+function sessionCovers(s) {
+  const keys = [s];
+  for (let k = addDays(s, 1); !isPrepDay(k) && keys.length < 7; k = addDays(k, 1)) keys.push(k);
+  return keys;
+}
+function upcomingSessions(from, count = 2) {
+  const out = [];
+  for (let k = from; out.length < count; k = addDays(k, 1)) if (isPrepDay(k)) out.push(k);
+  return out;
+}
+function namesFor(hits) {
+  const names = [...new Set(hits.map((x) => x.opt.name))];
+  const days = [...new Set(hits.map((x) => dayAbbr(x.k)))];
+  return `${names.slice(0, 3).join(", ")}${names.length > 3 ? ` +${names.length - 3}` : ""} · ${days.join(" ")}`;
+}
+function sessionTasks(s) {
+  const covers = sessionCovers(s);
+  const items = plannedItems(covers);
   const tasks = PREP_RULES.map((r) => {
     const hits = items.filter((x) => r.match.test(x.opt.name));
-    if (!hits.length) return null;
-    const names = [...new Set(hits.map((x) => x.opt.name))];
-    const days = [...new Set(hits.map((x) => dayAbbr(x.k)))];
-    return { id: r.id, task: r.task, when: r.when, detail: r.detail, forText: `${names.slice(0, 3).join(", ")}${names.length > 3 ? ` +${names.length - 3}` : ""} · ${days.join(" ")}` };
+    return hits.length ? { id: `b:${s}:${r.id}`, rule: r, task: r.task, mins: r.mins, detail: r.detail, forText: namesFor(hits) } : null;
   }).filter(Boolean);
-  // recipe-specific prep notes
   const recipes = [...new Map(items.filter((x) => x.opt.recipe && x.opt.recipe.prepNote).map((x) => [x.opt.recipe.id, x])).values()];
-  recipes.forEach((x) => tasks.push({ id: `r:${x.opt.recipe.id}`, task: `Prep: ${x.opt.recipe.title}`, when: dayAbbr(x.k), detail: x.opt.recipe.prepNote, forText: "" }));
+  recipes.forEach((x) => tasks.push({ id: `b:${s}:r:${x.opt.recipe.id}`, task: x.opt.recipe.title, mins: x.opt.recipe.time, detail: x.opt.recipe.prepNote, forText: dayAbbr(x.k) }));
+  return { s, covers, tasks };
+}
+function dailyTasks(k) {
+  const tomorrow = addDays(k, 1);
+  const items = plannedItems([tomorrow]);
+  const tasks = DAILY_PREP_RULES.map((r) => {
+    const hits = items.filter((x) => r.match.test(x.opt.name));
+    if (!hits.length) return null;
+    return { id: `d:${k}:${r.id}`, task: r.task, mins: r.mins, detail: r.detail, forText: r.id === "pack" ? "" : namesFor(hits) };
+  }).filter(Boolean);
+  if (isPrepDay(tomorrow)) {
+    sessionTasks(tomorrow).tasks.filter((t) => t.rule && t.rule.soak)
+      .forEach((t) => tasks.unshift({ id: `d:${k}:soak-${t.rule.id}`, task: t.rule.soak, mins: 5, detail: "Soak 8 h or overnight", forText: "" }));
+  }
+  return tasks;
+}
 
-  const done = Store.prepDone(wk);
-  const n = tasks.filter((t) => done.includes(t.id)).length;
-  $("#prepMeta").textContent = `${n}/${tasks.length}`;
-  $("#prepMeta").classList.toggle("done", tasks.length > 0 && n === tasks.length);
-  $("#prepSub").textContent = `${weekOffset === 0 ? "Remaining days this week" : $("#weekLabel").textContent} · ${fmtShort(keys[0])} – ${fmtShort(keys[6])}. Change meals in the Week view and this list updates.`;
-  $("#prepTasks").innerHTML = tasks.map((t) => `
+function taskList(tasks, done) {
+  return tasks.map((t) => `
     <li><label><input type="checkbox" data-prep="${esc(t.id)}" ${done.includes(t.id) ? "checked" : ""} />
-      <span><span class="prep-when">${esc(t.when)}</span><span class="cl">${esc(t.task)}</span>
-      <span class="hint">${esc(t.detail)}</span>${t.forText ? `<span class="prep-for">For: ${esc(t.forText)}</span>` : ""}</span></label></li>`).join("")
-    || `<li class="muted">Nothing to prep — the rest of the week is planned with no-cook options.</li>`;
+      <span><span class="cl">${esc(t.task)} <span class="mins">${t.mins} min</span></span>
+      <span class="hint">${esc(t.detail)}</span>${t.forText ? `<span class="prep-for">For: ${esc(t.forText)}</span>` : ""}</span></label></li>`).join("");
+}
+const sumMins = (tasks) => tasks.reduce((a, t) => a + t.mins, 0);
+const doneCount = (tasks, done) => tasks.filter((t) => done.includes(t.id)).length;
 
-  // shopping list
+function renderPrep() {
+  const today = todayKey();
+  const done = Store.prepDone(PREP_STORE);
+  const sessions = upcomingSessions(today).map(sessionTasks);
+
+  const openS = new Set($$("#bigSessions details[open]").map((x) => x.dataset.s));
+  const firstRender = !$("#bigSessions").children.length;
+  $("#bigSessions").innerHTML = sessions.map(({ s, covers, tasks }, i) => `
+    <details class="card fold ${s === today ? "wk-day today" : ""}" data-s="${s}" ${openS.has(s) || (firstRender && i === 0) ? "open" : ""}>
+      <summary class="card-head"><h2>🍱 ${s === today ? "Today — " : ""}${esc(dayLong(s))} big prep</h2><span class="pill ${tasks.length && doneCount(tasks, done) === tasks.length ? "done" : ""}">${doneCount(tasks, done)}/${tasks.length}</span></summary>
+      <p class="muted small">Covers ${dayAbbr(covers[0])}–${dayAbbr(covers[covers.length - 1])} meals · ${sumMins(tasks)} min of tasks — overlap cooker, oven &amp; chopping to finish faster</p>
+      <ul class="checks">${taskList(tasks, done) || `<li class="muted">Nothing to batch-cook — those days use no-cook options.</li>`}</ul>
+    </details>`).join("");
+
+  const openDays = new Set($$("#dailyPrep details[open]").map((x) => x.dataset.k));
+  $("#dailyPrep").innerHTML = Array.from({ length: 7 }, (_, i) => addDays(today, i)).map((k) => {
+    const tasks = dailyTasks(k);
+    const m = sumMins(tasks);
+    const n = doneCount(tasks, done);
+    return `<details class="daily-day" data-k="${k}" ${k === today || openDays.has(k) ? "open" : ""}>
+      <summary class="dd-head"><b>${i0(k, today)}</b><span class="muted small">${n}/${tasks.length} · ${m} min${m > DAILY_PREP_MINUTES ? " ⚠️" : ""}</span></summary>
+      <ul class="checks">${taskList(tasks, done)}</ul></details>`;
+  }).join("");
+
+  // shopping covers every day in the upcoming sessions
+  const shopKeys = [...new Set(sessions.flatMap((x) => x.covers))].sort();
+  $("#shopSub").textContent = `${dayAbbr(shopKeys[0])} ${fmtShort(shopKeys[0])} – ${dayAbbr(shopKeys[shopKeys.length - 1])} ${fmtShort(shopKeys[shopKeys.length - 1])}`;
+  const items = plannedItems(shopKeys);
   const count = (arr) => arr.reduce((m, x) => m.set(x, (m.get(x) || 0) + 1), new Map());
   const recipeUses = count(items.filter((x) => x.opt.recipe).map((x) => x.opt.recipe.id));
   const foodUses = count(items.filter((x) => !x.opt.recipe).map((x) => x.opt.name));
@@ -542,6 +602,63 @@ function renderPrep() {
   groups.push(`<div class="shop-group"><h4>Weekly staples</h4><ul>${WEEKLY_STAPLES.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>`);
   $("#shopList").innerHTML = groups.join("");
 }
+function i0(k, today) {
+  const t = addDays(today, 1);
+  return k === today ? `Today → for ${dayAbbr(t)}` : `${dayAbbr(k)} ${fmtShort(k)} → for ${dayAbbr(addDays(k, 1))}`;
+}
+
+// ---------- Thursday pantry check ----------
+function pantryItems() {
+  const sessions = upcomingSessions(addDays(todayKey(), 0));
+  const keys = [...new Set(sessions.flatMap(sessionCovers))].sort();
+  const items = plannedItems(keys);
+  const list = KEY_INGREDIENTS.map((ing) => {
+    const hits = items.filter((x) => ing.match.test(x.opt.name));
+    return hits.length ? { ...ing, uses: hits.length, forText: namesFor(hits) } : null;
+  }).filter(Boolean);
+  return { list, keys };
+}
+
+function renderPantry(host, metaEl) {
+  const { list, keys } = pantryItems();
+  const done = Store.prepDone(PREP_STORE);
+  // tick state lives for one cycle: from the most recent Thursday until the next
+  const back = (parseKey(todayKey()).getDay() - PANTRY_DAY + 7) % 7;
+  const cycle = addDays(todayKey(), -back);
+  const id = (it) => `p:${cycle}:${it.name}`;
+  const need = list.filter((it) => !done.includes(id(it)));
+  metaEl.textContent = need.length ? `${need.length} to buy` : "All set";
+  metaEl.classList.toggle("done", !need.length);
+  host.innerHTML = `
+    <p class="muted small">For meals ${dayAbbr(keys[0])} ${fmtShort(keys[0])} – ${dayAbbr(keys[keys.length - 1])} ${fmtShort(keys[keys.length - 1])} (next Friday & Sunday prep). Tick what you already have.</p>
+    <ul class="checks">${list.map((it) => `
+      <li><label><input type="checkbox" data-prep="${esc(id(it))}" ${done.includes(id(it)) ? "checked" : ""} />
+        <span><span class="cl">${esc(it.name)} <span class="mins">×${it.uses}</span></span>
+        ${it.note ? `<span class="hint">${esc(it.note)}</span>` : ""}<span class="prep-for">For: ${esc(it.forText)}</span></span></label></li>`).join("")}
+    </ul>
+    ${need.length ? `<div class="to-buy"><b>To buy:</b> ${need.map((x) => esc(x.name)).join(", ")}</div>
+      <button class="btn sm" data-copybuy>📋 Copy to-buy list</button>` : `<p class="ok">✓ Pantry ready for prep</p>`}`;
+  const btn = host.querySelector("[data-copybuy]");
+  if (btn) btn.onclick = async () => {
+    const text = `Groceries for prep (${fmtShort(keys[0])}):\n` + need.map((x) => `- ${x.name}`).join("\n") + "\n" + WEEKLY_STAPLES.map((x) => `- ${x}`).join("\n");
+    try { await navigator.clipboard.writeText(text); btn.textContent = "✓ Copied"; } catch { prompt("Copy this list:", text); }
+  };
+}
+
+function renderTodayPrep() {
+  const k = todayKey();
+  const done = Store.prepDone(PREP_STORE);
+  const daily = dailyTasks(k);
+  const big = isPrepDay(k) ? sessionTasks(k).tasks : [];
+  const all = [...big, ...daily];
+  $("#todayPrepMeta").textContent = `${doneCount(all, done)}/${all.length}`;
+  $("#todayPrepMeta").classList.toggle("done", all.length > 0 && doneCount(all, done) === all.length);
+  $("#todayPrep").innerHTML = `
+    ${big.length ? `<div class="hb-group">🍱 Big prep day · ~${sumMins(big)} min</div><ul class="checks">${taskList(big, done)}</ul>` : ""}
+    <div class="hb-group">⏱️ 15-min prep for tomorrow · ${sumMins(daily)} min</div>
+    <ul class="checks">${taskList(daily, done)}</ul>
+    ${big.length ? "" : `<p class="muted small">Next big prep: ${esc(dayLong(upcomingSessions(addDays(k, 1), 1)[0]))}</p>`}`;
+}
 
 function buildPlan() {
   $("#planSeg").onclick = (e) => {
@@ -550,6 +667,8 @@ function buildPlan() {
     ["today", "week", "prep"].forEach((v) => ($(`#pv-${v}`).hidden = v !== b.dataset.pv));
     renderPlan();
   };
+  const dow = new Date().getDay();
+  $("#pantryFold").open = dow >= 3 && dow <= 5;
   $("#prevWeek").onclick = () => { weekOffset--; renderPlan(); };
   $("#nextWeek").onclick = () => { weekOffset++; renderPlan(); };
   $("#weekDays").addEventListener("click", (e) => {
@@ -567,10 +686,10 @@ function buildPlan() {
       }
     }, k);
   });
-  $("#prepTasks").addEventListener("change", (e) => {
+  $("#guide-plan").addEventListener("change", (e) => {
     const c = e.target.closest("[data-prep]"); if (!c) return;
-    Store.togglePrep(weekKeys()[0], c.dataset.prep);
-    renderPrep();
+    Store.togglePrep(PREP_STORE, c.dataset.prep);
+    renderPlan();
   });
   $("#woChips").innerHTML = WORKOUTS.map((w) => `<button class="chip" data-wo="${w.id}">${esc(w.title.split(" — ")[0])}</button>`).join("");
   $("#woChips").onclick = (e) => {
@@ -616,7 +735,8 @@ function buildPlan() {
 
 function renderPlan() {
   if (!$("#pv-week").hidden) renderWeek();
-  if (!$("#pv-prep").hidden) { renderWeek(); renderPrep(); }
+  if (!$("#pv-prep").hidden) { renderPrep(); renderPantry($("#pantryCheck"), $("#pantryMeta")); }
+  renderTodayPrep();
   const k = todayKey();
   const d = Store.day(k);
   const openRecipes = new Set($$("#planMeals details[open]").map((x) => x.dataset.slot));

@@ -27,6 +27,11 @@
         <button class="icon-btn" id="nextDay" aria-label="Next day">›</button>
       </div>
 
+      <div class="card nudge" id="thursdayCard" hidden>
+        <div class="card-head"><h2>🧺 Thursday pantry check</h2><span class="pill" id="thuMeta"></span></div>
+        <div id="thursdayCheck"></div>
+      </div>
+
       <div class="card score-card">
         <div class="ring" id="scoreRing"><span id="scoreVal">0%</span></div>
         <div>
@@ -153,15 +158,20 @@
           <div id="weekDays"></div>
         </div>
         <div id="pv-prep" hidden>
-          <div class="card">
-            <div class="card-head"><h2>🍱 Batch prep for the week</h2><span id="prepMeta" class="pill"></span></div>
-            <p class="muted small" id="prepSub"></p>
-            <ul id="prepTasks" class="checks"></ul>
-          </div>
-          <div class="card">
-            <div class="card-head"><h2>🛒 Shopping list</h2><span class="muted small">from this week's plan</span></div>
+          <p class="muted small center">Big batch prep on <b>Friday & Sunday</b> · 15-min prep every day for tomorrow</p>
+          <details class="card fold" id="pantryFold">
+            <summary class="card-head"><h2>🧺 Pantry check</h2><span class="pill" id="pantryMeta"></span></summary>
+            <div id="pantryCheck"></div>
+          </details>
+          <div id="bigSessions"></div>
+          <details class="card fold" open>
+            <summary class="card-head"><h2>⏱️ Daily 15-min prep</h2><span class="muted small">for tomorrow's meals</span></summary>
+            <div id="dailyPrep"></div>
+          </details>
+          <details class="card fold">
+            <summary class="card-head"><h2>🛒 Shopping list</h2><span class="muted small" id="shopSub"></span></summary>
             <div id="shopList"></div>
-          </div>
+          </details>
         </div>
         <div id="pv-today">
         <div class="card">
@@ -172,6 +182,10 @@
           <div class="card-head"><h2>🏃 Today's workout</h2><span id="planWoMeta" class="pill"></span></div>
           <div id="woChips" class="chips scroll"></div>
           <div id="planWorkout"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>⏱️ Prep today</h2><span id="todayPrepMeta" class="pill"></span></div>
+          <div id="todayPrep"></div>
         </div>
         </div>
       </div>
