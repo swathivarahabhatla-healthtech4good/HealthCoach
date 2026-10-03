@@ -44,6 +44,7 @@ const Store = (() => {
       sleep: 0,
       weight: null,
       notes: "",
+      plan: { breakfast: null, lunch: null, snacks: null, dinner: null, workout: null, exDone: [] },
     };
   }
 
@@ -51,7 +52,7 @@ const Store = (() => {
     const d = state.days[key];
     if (!d) return blankDay();
     const b = blankDay();
-    return { ...b, ...d, meals: { ...b.meals, ...d.meals }, workout: { ...b.workout, ...d.workout }, checks: { ...d.checks } };
+    return { ...b, ...d, meals: { ...b.meals, ...d.meals }, workout: { ...b.workout, ...d.workout }, checks: { ...d.checks }, plan: { ...b.plan, ...d.plan } };
   }
 
   function setDay(key, d) {

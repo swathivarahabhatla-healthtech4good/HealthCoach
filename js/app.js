@@ -12,6 +12,7 @@ function showTab(name) {
   $$(".tab").forEach((t) => (t.hidden = t.id !== `tab-${name}`));
   Charts.hideTip();
   if (name === "trends") renderTrends();
+  if (name === "guide") renderPlan();
   window.scrollTo(0, 0);
   try { localStorage.setItem("healthcoach.tab", name); } catch {}
 }
@@ -60,8 +61,17 @@ function buildTodayStatic() {
 
   $("#foodSuggest").innerHTML = FOODS.map((f) => `<option value="${esc(f.name)}">`).join("");
   $("#mealInputs").innerHTML = MEALS.map((m) =>
-    `<label class="meal"><span class="field-label">${m.label}</span><input data-meal="${m.id}" list="foodSuggest" placeholder="e.g. ${esc(sampleFor(m.id))}" /></label>`).join("");
+    `<label class="meal"><span class="field-label">${m.label}<span class="plan-hint" data-ph="${m.id}"></span></span><input data-meal="${m.id}" list="foodSuggest" placeholder="e.g. ${esc(sampleFor(m.id))}" /></label>`).join("");
   $$("#mealInputs input").forEach((i) => (i.onchange = () => update((d) => (d.meals[i.dataset.meal] = i.value))));
+  $("#mealInputs").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-eat]"); if (!b) return;
+    e.preventDefault();
+    eatPlanned(currentKey, b.dataset.eat);
+  });
+  $("#workoutPlan").onclick = (e) => {
+    if (e.target.closest("[data-logwo]")) logPlannedWorkout(currentKey);
+    if (e.target.closest("[data-openplan]")) openPlan();
+  };
 
   $("#checkGroups").innerHTML = CHECKLIST_GROUPS.map((g) => `
     <details class="card group" open data-g="${g.id}">
@@ -127,6 +137,17 @@ function renderToday() {
   $("#workoutText").textContent = `${d.workout.minutes}/${s.workoutGoal} min`;
 
   $$("#mealInputs input").forEach((i) => (i.value = d.meals[i.dataset.meal] || ""));
+  MEALS.forEach((m) => {
+    const opt = plannedMeal(currentKey, d, m.id);
+    const eaten = mealHas(d, m.id, opt.name);
+    $(`[data-ph="${m.id}"]`).innerHTML = opt
+      ? ` · plan: ${esc(opt.name)} ${eaten ? "<b class=\"ok\">✓</b>" : `<button class="link" data-eat="${m.id}">✓ ate this</button>`}`
+      : "";
+  });
+  const wo = plannedWorkout(currentKey, d);
+  const woLogged = d.workout.minutes >= wo.minutes;
+  $("#workoutPlan").innerHTML = `<span>Plan: <b>${esc(wo.title)}</b> · ${wo.minutes} min</span>
+    <span class="row gap">${woLogged ? "<b class=\"ok\">✓ done</b>" : `<button class="btn sm primary" data-logwo>✓ Log it</button>`}<button class="btn sm" data-openplan>See plan</button></span>`;
   $("#quickIdeas").innerHTML = pickIdeas().map((f) =>
     `<button class="chip idea" title="${esc(f.why)}" data-name="${esc(f.name)}">${esc(f.name)}</button>`).join("");
   $("#quickIdeas").onclick = (e) => {
@@ -292,7 +313,7 @@ function buildGuide() {
   $("#guideSeg").onclick = (e) => {
     const b = e.target.closest("button"); if (!b) return;
     $$("#guideSeg button").forEach((x) => x.classList.toggle("on", x === b));
-    ["foods", "recipes", "limit"].forEach((v) => ($(`#guide-${v}`).hidden = v !== b.dataset.view));
+    ["plan", "foods", "recipes", "limit"].forEach((v) => ($(`#guide-${v}`).hidden = v !== b.dataset.view));
   };
 
   $("#catChips").innerHTML = [{ id: "all", label: "All" }, { id: "fav", label: "★ Favourites" }, ...FOOD_CATEGORIES]
@@ -375,10 +396,160 @@ function renderRecipes() {
     </details>`).join("") : `<p class="muted">No recipes from this source yet.</p>`;
 }
 
+// ================= PLAN (today's meals + workout) =================
+const SLOT_SOURCES = {
+  breakfast: { cats: ["breakfast"], meal: ["breakfast"] },
+  lunch: { cats: ["meal"], meal: ["meal"] },
+  dinner: { cats: ["meal"], meal: ["meal"] },
+  snacks: { cats: ["snack"], meal: ["snack"] },
+};
+const SLOT_OFFSET = { breakfast: 0, lunch: 1, snacks: 2, dinner: 5 };
+
+// Recipes first (they have full instructions), then foods; favourites float to the top.
+function slotOptions(slot, favFirst = true) {
+  const src = SLOT_SOURCES[slot];
+  const favs = Store.favorites;
+  const opts = [
+    ...RECIPES.filter((r) => src.meal.includes(r.meal)).map((r) => ({ key: `r:${r.id}`, name: r.title, why: r.prepNote, tags: r.tags, recipe: r })),
+    ...FOODS.filter((f) => src.cats.includes(f.cat)).map((f) => ({ key: `f:${f.name}`, name: f.name, why: `${f.serving} — ${f.why}`, tags: f.tags })),
+  ];
+  return favFirst ? opts.sort((a, b) => favs.includes(b.name) - favs.includes(a.name)) : opts;
+}
+function dayIndex(k) { return Math.round(parseKey(k).getTime() / 864e5); }
+
+function plannedMeal(key, d, slot) {
+  const opts = slotOptions(slot, false); // stable order so starring a food doesn't reshuffle the default
+  if (!opts.length) return null;
+  return opts.find((o) => o.key === d.plan[slot]) || opts[(dayIndex(key) * 3 + SLOT_OFFSET[slot]) % opts.length];
+}
+function plannedWorkout(key, d) {
+  return WORKOUTS.find((w) => w.id === d.plan.workout) || WORKOUTS.find((w) => w.id === WEEKLY_WORKOUT[parseKey(key).getDay()]);
+}
+function mealHas(d, slot, name) { return (d.meals[slot] || "").toLowerCase().includes(name.toLowerCase()); }
+
+function eatPlanned(key, slot) {
+  const d = Store.day(key);
+  const name = plannedMeal(key, d, slot).name;
+  if (!mealHas(d, slot, name)) d.meals[slot] = d.meals[slot] ? `${d.meals[slot]}, ${name}` : name;
+  Store.setDay(key, d);
+  renderToday(); renderPlan();
+}
+function logPlannedWorkout(key) {
+  const d = Store.day(key);
+  const wo = plannedWorkout(key, d);
+  d.workout.type = wo.type;
+  d.workout.minutes = Math.max(d.workout.minutes, wo.minutes);
+  Store.setDay(key, d);
+  renderToday(); renderPlan();
+}
+function openPlan() {
+  showTab("guide");
+  $('#guideSeg [data-view="plan"]').click();
+}
+
+function setPlan(fn) {
+  const k = todayKey();
+  const d = Store.day(k);
+  fn(d);
+  Store.setDay(k, d);
+  renderPlan();
+  if (currentKey === k) renderToday();
+}
+
+function buildPlan() {
+  $("#woChips").innerHTML = WORKOUTS.map((w) => `<button class="chip" data-wo="${w.id}">${esc(w.title.split(" — ")[0])}</button>`).join("");
+  $("#woChips").onclick = (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    setPlan((d) => { d.plan.workout = b.dataset.wo; d.plan.exDone = []; });
+  };
+  $("#newIdeas").onclick = () => setPlan((d) => {
+    MEALS.forEach((m) => {
+      const opts = slotOptions(m.id);
+      const cur = plannedMeal(todayKey(), d, m.id);
+      const rest = opts.filter((o) => o.key !== cur.key);
+      if (rest.length) d.plan[m.id] = rest[Math.floor(Math.random() * rest.length)].key;
+    });
+  });
+  $("#planMeals").addEventListener("click", (e) => {
+    const sw = e.target.closest("[data-swap]");
+    if (sw) {
+      const slot = sw.dataset.swap;
+      setPlan((d) => {
+        const opts = slotOptions(slot);
+        const i = opts.findIndex((o) => o.key === plannedMeal(todayKey(), d, slot).key);
+        d.plan[slot] = opts[(i + 1) % opts.length].key;
+      });
+    }
+    const eat = e.target.closest("[data-eat]");
+    if (eat) eatPlanned(todayKey(), eat.dataset.eat);
+  });
+  $("#planMeals").addEventListener("change", (e) => {
+    const sel = e.target.closest("select[data-pick]"); if (!sel) return;
+    setPlan((d) => (d.plan[sel.dataset.pick] = sel.value));
+  });
+  $("#planWorkout").addEventListener("change", (e) => {
+    const c = e.target.closest("input[data-ex]"); if (!c) return;
+    setPlan((d) => {
+      const i = Number(c.dataset.ex);
+      d.plan.exDone = c.checked ? [...new Set([...d.plan.exDone, i])] : d.plan.exDone.filter((x) => x !== i);
+    });
+  });
+  $("#planWorkout").addEventListener("click", (e) => {
+    if (e.target.closest("[data-logwo]")) logPlannedWorkout(todayKey());
+  });
+}
+
+function renderPlan() {
+  const k = todayKey();
+  const d = Store.day(k);
+  const openRecipes = new Set($$("#planMeals details[open]").map((x) => x.dataset.slot));
+
+  $("#planMeals").innerHTML = MEALS.map((m) => {
+    const opt = plannedMeal(k, d, m.id);
+    const eaten = mealHas(d, m.id, opt.name);
+    const r = opt.recipe;
+    return `<div class="plan-meal ${eaten ? "eaten" : ""}">
+      <div class="pm-head"><span class="pm-slot">${m.label}</span>
+        <span class="row gap">
+          <button class="btn sm" data-swap="${m.id}" aria-label="Swap ${m.label}">↻ Swap</button>
+          ${eaten ? `<b class="ok">✓ Eaten</b>` : `<button class="btn sm primary" data-eat="${m.id}">✓ Ate this</button>`}
+        </span></div>
+      <select data-pick="${m.id}" aria-label="Choose ${m.label}">
+        ${slotOptions(m.id).map((o) => `<option value="${esc(o.key)}" ${o.key === opt.key ? "selected" : ""}>${Store.favorites.includes(o.name) ? "★ " : ""}${o.recipe ? "📖 " : ""}${esc(o.name)}</option>`).join("")}
+      </select>
+      ${opt.why ? `<p class="muted small">${esc(opt.why)}</p>` : ""}
+      <div class="tags">${opt.tags.map((t) => `<span class="t t-${t}">${TAG_LABELS[t]}</span>`).join("")}</div>
+      ${r ? `<details class="pm-recipe" data-slot="${m.id}" ${openRecipes.has(m.id) ? "open" : ""}><summary>📖 Recipe · ${r.time} min</summary>
+        ${r.thyroidNote ? `<p class="thy">💊 ${esc(r.thyroidNote)}</p>` : ""}
+        <h4>Ingredients</h4><ul>${r.ingredients.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>
+        <h4>Steps</h4><ol>${r.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>
+        ${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">View original ↗</a>` : ""}
+      </details>` : ""}
+    </div>`;
+  }).join("");
+
+  const wo = plannedWorkout(k, d);
+  const done = d.plan.exDone.filter((i) => i < wo.items.length).length;
+  const logged = d.workout.minutes >= wo.minutes;
+  $$("#woChips .chip").forEach((c) => c.classList.toggle("on", c.dataset.wo === wo.id));
+  $("#planWoMeta").textContent = `${done}/${wo.items.length}`;
+  $("#planWoMeta").classList.toggle("done", done === wo.items.length);
+  $("#planWorkout").innerHTML = `
+    <h3>${esc(wo.title)}</h3>
+    <div class="muted small">${wo.minutes} min · ${esc(wo.intensity)}${wo.id === WEEKLY_WORKOUT[parseKey(k).getDay()] ? " · today's default" : ""}</div>
+    <ul class="checks">${wo.items.map((it, i) => `
+      <li><label><input type="checkbox" data-ex="${i}" ${d.plan.exDone.includes(i) ? "checked" : ""} />
+        <span><span class="cl">${esc(it.name)}</span><span class="hint">${esc(it.detail)}</span></span></label></li>`).join("")}
+    </ul>
+    <p class="prep">💡 ${esc(wo.note)}</p>
+    ${logged ? `<p class="ok">✓ Logged on Today: ${d.workout.minutes} min ${esc(d.workout.type)}</p>` : `<button class="btn primary" data-logwo>✓ Log this workout (${wo.minutes} min)</button>`}`;
+}
+
 // ================= boot =================
 buildTodayStatic();
 buildTrendsStatic();
 buildGuide();
+buildPlan();
 renderToday();
 let startTab = "today";
 try { startTab = localStorage.getItem("healthcoach.tab") || "today"; } catch {}

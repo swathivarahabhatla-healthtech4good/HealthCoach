@@ -213,3 +213,89 @@ const COACH_TIPS = [
   "Cooked cruciferous veg are fine — don't fear broccoli and cabbage.",
   "Turmeric needs black pepper and a little fat to absorb well.",
 ];
+
+// ---------- Workout routines ----------
+// Low-impact, beginner-friendly and fatigue-aware: steady daily movement plus
+// 2× strength a week. `type` must match an entry in WORKOUT_TYPES.
+const WORKOUTS = [
+  {
+    id: "strengthLower", title: "Strength A — legs & glutes", type: "Strength", minutes: 30, intensity: "Moderate",
+    items: [
+      { name: "Warm-up march + arm circles", detail: "3 min" },
+      { name: "Chair squats", detail: "3 × 10–12" },
+      { name: "Glute bridges", detail: "3 × 12" },
+      { name: "Reverse lunges (hold a chair)", detail: "2 × 8 each leg" },
+      { name: "Calf raises", detail: "2 × 15" },
+      { name: "Side-lying leg lifts", detail: "2 × 12 each side" },
+      { name: "Stretch: hamstrings, quads, hips", detail: "5 min" },
+    ],
+    note: "Rest 45–60 s between sets. Stop 2 reps before failure.",
+  },
+  {
+    id: "walkStretch", title: "Brisk walk + stretch", type: "Walk", minutes: 35, intensity: "Easy–moderate",
+    items: [
+      { name: "Easy walk", detail: "5 min" },
+      { name: "Brisk walk (can talk, can't sing)", detail: "25 min" },
+      { name: "Cool-down stretch", detail: "5 min" },
+    ],
+    note: "Try a 10-min walk after lunch or dinner too — great for blood sugar.",
+  },
+  {
+    id: "yogaFlow", title: "Gentle yoga flow", type: "Yoga", minutes: 25, intensity: "Easy",
+    items: [
+      { name: "Deep breathing (anulom vilom)", detail: "3 min" },
+      { name: "Cat–cow", detail: "10 rounds" },
+      { name: "Sun salutations (slow)", detail: "4 rounds" },
+      { name: "Cobra (bhujangasana)", detail: "3 × 20 s" },
+      { name: "Bridge pose (setu bandhasana)", detail: "3 × 20 s" },
+      { name: "Fish pose (matsyasana), supported", detail: "2 × 20 s" },
+      { name: "Legs up the wall", detail: "3 min" },
+      { name: "Shavasana", detail: "3 min" },
+    ],
+    note: "Skip any neck-loading pose if it feels uncomfortable.",
+  },
+  {
+    id: "strengthUpper", title: "Strength B — upper body & core", type: "Strength", minutes: 30, intensity: "Moderate",
+    items: [
+      { name: "Warm-up: arm swings, torso twists", detail: "3 min" },
+      { name: "Wall or incline push-ups", detail: "3 × 8–12" },
+      { name: "Band or water-bottle rows", detail: "3 × 12" },
+      { name: "Overhead press (light weights)", detail: "2 × 10" },
+      { name: "Dead bug", detail: "3 × 8 each side" },
+      { name: "Forearm plank (knees ok)", detail: "3 × 20–30 s" },
+      { name: "Stretch: chest, shoulders, back", detail: "5 min" },
+    ],
+    note: "Bottles or a backpack with books work as weights.",
+  },
+  {
+    id: "walkIntervals", title: "Walking intervals", type: "Cardio", minutes: 30, intensity: "Moderate",
+    items: [
+      { name: "Easy walk warm-up", detail: "5 min" },
+      { name: "6 rounds: 1 min fast + 2 min easy", detail: "18 min" },
+      { name: "Easy walk cool-down", detail: "5 min" },
+      { name: "Stretch", detail: "2 min" },
+    ],
+    note: "Fast = breathing hard but in control. Stairs or a slope add challenge.",
+  },
+  {
+    id: "longActive", title: "Long fun session", type: "Walk", minutes: 45, intensity: "Easy–moderate",
+    items: [
+      { name: "Long walk, cycle, swim or dance", detail: "40 min" },
+      { name: "Stretch", detail: "5 min" },
+    ],
+    note: "Pick what you enjoy — consistency beats intensity.",
+  },
+  {
+    id: "restMobility", title: "Rest + mobility", type: "Stretch", minutes: 15, intensity: "Very easy",
+    items: [
+      { name: "Neck & shoulder rolls", detail: "2 min" },
+      { name: "Hip circles + cat–cow", detail: "3 min" },
+      { name: "Child's pose + gentle twists", detail: "5 min" },
+      { name: "Relaxed stroll (optional)", detail: "5 min+" },
+    ],
+    note: "Recovery day. Low energy? This is the whole workout — and that's fine.",
+  },
+];
+
+// Default routine per weekday (0 = Sunday).
+const WEEKLY_WORKOUT = ["restMobility", "strengthLower", "walkStretch", "yogaFlow", "strengthUpper", "walkIntervals", "longActive"];

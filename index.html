@@ -36,6 +36,24 @@
       </div>
 
       <div class="card">
+        <div class="card-head"><h2>🍽️ Meals</h2><span class="muted small">What did you eat?</span></div>
+        <div id="mealInputs"></div>
+        <datalist id="foodSuggest"></datalist>
+        <div class="field-label">Ready-to-eat ideas right now</div>
+        <div id="quickIdeas" class="chips"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>🏃 Workout</h2><span id="workoutText" class="muted"></span></div>
+        <div id="workoutPlan" class="plan-line"></div>
+        <div id="workoutTypes" class="chips"></div>
+        <div class="grid2">
+          <label><span class="field-label">Minutes</span><input id="workoutMin" type="number" min="0" step="5" inputmode="numeric" /></label>
+          <label><span class="field-label">Steps</span><input id="steps" type="number" min="0" step="500" inputmode="numeric" /></label>
+        </div>
+      </div>
+
+      <div class="card">
         <div class="card-head"><h2>💧 Water</h2><span id="waterText" class="muted"></span></div>
         <div id="waterGlasses" class="glasses"></div>
         <div class="row gap">
@@ -52,23 +70,6 @@
         <div id="energyPick" class="pick" role="radiogroup" aria-label="Energy"></div>
         <label class="field-label" for="sleepIn">Sleep last night (hours)</label>
         <input id="sleepIn" type="number" min="0" max="14" step="0.5" inputmode="decimal" />
-      </div>
-
-      <div class="card">
-        <div class="card-head"><h2>🏃 Workout</h2><span id="workoutText" class="muted"></span></div>
-        <div id="workoutTypes" class="chips"></div>
-        <div class="grid2">
-          <label><span class="field-label">Minutes</span><input id="workoutMin" type="number" min="0" step="5" inputmode="numeric" /></label>
-          <label><span class="field-label">Steps</span><input id="steps" type="number" min="0" step="500" inputmode="numeric" /></label>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-head"><h2>🍽️ Meals</h2><span class="muted small">What did you eat?</span></div>
-        <div id="mealInputs"></div>
-        <datalist id="foodSuggest"></datalist>
-        <div class="field-label">Ready-to-eat ideas right now</div>
-        <div id="quickIdeas" class="chips"></div>
       </div>
 
       <div id="checkGroups"></div>
@@ -131,12 +132,25 @@
     <!-- ============ TAB 3: FOOD GUIDE ============ -->
     <section id="tab-guide" class="tab" hidden aria-labelledby="nav-guide">
       <div class="seg" id="guideSeg">
-        <button data-view="foods" class="on">Foods</button>
+        <button data-view="plan" class="on">Plan</button>
+        <button data-view="foods">Foods</button>
         <button data-view="recipes">Recipes</button>
         <button data-view="limit">Limits</button>
       </div>
 
-      <div id="guide-foods">
+      <div id="guide-plan">
+        <div class="card">
+          <div class="card-head"><h2>🍽️ Today's meals</h2><button class="btn sm" id="newIdeas">↻ New ideas</button></div>
+          <div id="planMeals"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>🏃 Today's workout</h2><span id="planWoMeta" class="pill"></span></div>
+          <div id="woChips" class="chips scroll"></div>
+          <div id="planWorkout"></div>
+        </div>
+      </div>
+
+      <div id="guide-foods" hidden>
         <input id="foodSearch" type="search" placeholder="Search foods, snacks, drinks…" aria-label="Search foods" />
         <div id="catChips" class="chips scroll"></div>
         <div id="tagChips" class="chips scroll"></div>
@@ -170,7 +184,7 @@
   <nav class="tabbar" role="tablist" aria-label="Sections">
     <button role="tab" id="nav-today" data-tab="today" aria-selected="true"><span>✅</span>Today</button>
     <button role="tab" id="nav-trends" data-tab="trends" aria-selected="false"><span>📈</span>Trends</button>
-    <button role="tab" id="nav-guide" data-tab="guide" aria-selected="false"><span>🥑</span>Food guide</button>
+    <button role="tab" id="nav-guide" data-tab="guide" aria-selected="false"><span>🥑</span>Plan & food</button>
   </nav>
 
   <div id="tooltip" class="tooltip" role="status" hidden></div>

@@ -23,12 +23,10 @@
 
 const RECIPE_SOURCES = [
   { id: "starter", name: "Health Coach starters", url: null },
-  { id: "vedicdiet", name: "Vedic Diet", url: null }, // TODO: confirm exact site URL
   { id: "vismai", name: "Vismai Food", url: "https://vismaifood.com" },
   { id: "hebbars", name: "Hebbar's Kitchen", url: "https://hebbarskitchen.com" },
   { id: "cleandelicious", name: "Clean & Delicious", url: "https://cleananddelicious.com" },
   { id: "ranveerbrar", name: "Ranveer Brar", url: "https://ranveerbrar.com" },
-  { id: "rajshri", name: "Rajshri Food", url: "https://www.youtube.com/@rajshrifood" },
 ];
 
 const RECIPES = [
