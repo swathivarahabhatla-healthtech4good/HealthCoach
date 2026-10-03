@@ -7,7 +7,7 @@ const Store = (() => {
   let state = load();
 
   function blank() {
-    return { days: {}, settings: { ...DEFAULT_SETTINGS }, favorites: [] };
+    return { days: {}, settings: { ...DEFAULT_SETTINGS }, favorites: [], prepDone: {} };
   }
 
   function load() {
@@ -19,6 +19,7 @@ const Store = (() => {
         days: s.days || {},
         settings: { ...DEFAULT_SETTINGS, ...(s.settings || {}) },
         favorites: s.favorites || [],
+        prepDone: s.prepDone || {},
       };
     } catch {
       return blank();
@@ -71,12 +72,18 @@ const Store = (() => {
       if (i >= 0) state.favorites.splice(i, 1); else state.favorites.push(id);
       save();
     },
+    prepDone(week) { return state.prepDone[week] || []; },
+    togglePrep(week, id) {
+      const cur = state.prepDone[week] || [];
+      state.prepDone[week] = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
+      save();
+    },
     dayKeys() { return Object.keys(state.days).sort(); },
     exportJSON() { return JSON.stringify(state, null, 2); },
     importJSON(text) {
       const s = JSON.parse(text);
       if (!s || typeof s.days !== "object") throw new Error("Not a Health Coach backup file");
-      state = { days: s.days, settings: { ...DEFAULT_SETTINGS, ...(s.settings || {}) }, favorites: s.favorites || [] };
+      state = { days: s.days, settings: { ...DEFAULT_SETTINGS, ...(s.settings || {}) }, favorites: s.favorites || [], prepDone: s.prepDone || {} };
       save();
     },
   };

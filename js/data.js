@@ -199,20 +199,6 @@ const LIMIT_FOODS = [
   { name: "Gluten (optional trial)", level: "moderate", why: "Some people with Hashimoto's feel better reducing gluten. Talk to your doctor before cutting it out." },
 ];
 
-const COACH_TIPS = [
-  "Take your thyroid pill at the same time every day, with water only.",
-  "Protein first: start each meal with the egg, paneer or dal.",
-  "Fill half your plate with vegetables before adding grains.",
-  "A 10-minute walk after meals helps blood sugar.",
-  "Thirsty often feels like hungry — drink a glass of water first.",
-  "Sunday prep = weekday wins: boil eggs, cook a dal, chop veg.",
-  "Fatigue is common with hypothyroidism — short daily walks beat occasional long workouts.",
-  "Strength training 2–3×/week helps metabolism; bodyweight squats count.",
-  "Sleep 7–8 h: poor sleep raises cravings the next day.",
-  "Keep a ready snack in your bag so you're never stuck with vending-machine choices.",
-  "Cooked cruciferous veg are fine — don't fear broccoli and cabbage.",
-  "Turmeric needs black pepper and a little fat to absorb well.",
-];
 
 // ---------- Workout routines ----------
 // Low-impact, beginner-friendly and fatigue-aware: steady daily movement plus
@@ -297,5 +283,36 @@ const WORKOUTS = [
   },
 ];
 
+// Batch-prep tasks, triggered when a planned meal's name matches `match`.
+// Order here is the order they appear in the prep list.
+const PREP_RULES = [
+  { id: "eggs", match: /egg|bhurji|omelette|shakshuka/i, task: "Boil eggs for the fridge", when: "Sun + Wed", detail: "Keep 6 peeled eggs ready; 5–7 days in the fridge" },
+  { id: "pulses", match: /rajma|chole|chickpea|chana|hummus|sprouts/i, task: "Soak & pressure-cook chickpeas / rajma", when: "Sat night soak, Sun cook", detail: "Cook a big batch; portion into boxes or freeze" },
+  { id: "dal", match: /dal|lentil|khichdi|sambar|masoor/i, task: "Cook a pot of dal / lentil soup", when: "Sun + Wed", detail: "4 portions keep 3–4 days" },
+  { id: "chilla", match: /chilla/i, task: "Soak moong dal & grind chilla batter", when: "Night before", detail: "Batter keeps 2 days in the fridge" },
+  { id: "grains", match: /quinoa|millet|upma|rice|ragi|bowl|khichdi|roti/i, task: "Cook a batch of quinoa / millet", when: "Sun", detail: "Cool fast, refrigerate up to 4 days" },
+  { id: "oats", match: /oats/i, task: "Make overnight-oats jars", when: "Sun + Wed", detail: "3 jars at a time" },
+  { id: "muffins", match: /muffin/i, task: "Bake egg muffins", when: "Sun", detail: "12 muffins = 6 breakfasts" },
+  { id: "sprouts", match: /sprouts/i, task: "Start moong sprouts", when: "2 days before", detail: "Soak 8 h, drain, keep covered" },
+  { id: "veg", match: /veg|sabzi|salad|bowl|stir|palak|spinach|curry|soup|hummus|shakshuka|upma/i, task: "Wash & chop vegetables", when: "Sun + Wed", detail: "Store in boxes lined with paper towel" },
+  { id: "paneer", match: /paneer|tofu/i, task: "Cube paneer / press tofu", when: "Sun", detail: "Keeps 3 days in water in the fridge" },
+  { id: "snacks", match: /makhana|nuts|seeds|roasted chana|walnut|almond|pumpkin/i, task: "Portion snack boxes", when: "Sun", detail: "One small box per day — no eating from the bag" },
+  { id: "dressing", match: /salad|bowl|quinoa/i, task: "Shake up a jar of dressing", when: "Sun", detail: "Lemon + olive oil + cumin; 1 week" },
+];
+
 // Default routine per weekday (0 = Sunday).
 const WEEKLY_WORKOUT = ["restMobility", "strengthLower", "walkStretch", "yogaFlow", "strengthUpper", "walkIntervals", "longActive"];
+
+// Always-on shopping list for this profile.
+const WEEKLY_STAPLES = [
+  "Eggs (12–18)",
+  "Plain Greek yogurt / curd",
+  "Spinach or other leafy greens",
+  "Mixed vegetables (peppers, carrots, tomato, cucumber, onion)",
+  "Berries (fresh or frozen) + 1 other fruit",
+  "Lemons, ginger, garlic",
+  "Paneer (200 g)",
+  "Ground flax / chia, walnuts, pumpkin seeds",
+  "Brazil nuts (small pack)",
+  "Green tea / herbal tea",
+];

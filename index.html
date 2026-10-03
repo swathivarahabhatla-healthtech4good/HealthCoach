@@ -30,8 +30,8 @@
       <div class="card score-card">
         <div class="ring" id="scoreRing"><span id="scoreVal">0%</span></div>
         <div>
-          <div class="muted small">Coach tip</div>
-          <p id="coachTip" class="tip"></p>
+          <div class="muted small">Today's progress</div>
+          <div id="progressList" class="progress-list"></div>
         </div>
       </div>
 
@@ -139,6 +139,31 @@
       </div>
 
       <div id="guide-plan">
+        <div class="seg sub" id="planSeg">
+          <button data-pv="today" class="on">Today</button>
+          <button data-pv="week">Week</button>
+          <button data-pv="prep">Prep & shop</button>
+        </div>
+        <div id="pv-week" hidden>
+          <div class="week-nav">
+            <button class="icon-btn" id="prevWeek" aria-label="Previous week">‹</button>
+            <div class="day-title"><div id="weekLabel" class="day-label sm"></div><div class="muted small">Tap ↻ to swap any meal</div></div>
+            <button class="icon-btn" id="nextWeek" aria-label="Next week">›</button>
+          </div>
+          <div id="weekDays"></div>
+        </div>
+        <div id="pv-prep" hidden>
+          <div class="card">
+            <div class="card-head"><h2>🍱 Batch prep for the week</h2><span id="prepMeta" class="pill"></span></div>
+            <p class="muted small" id="prepSub"></p>
+            <ul id="prepTasks" class="checks"></ul>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>🛒 Shopping list</h2><span class="muted small">from this week's plan</span></div>
+            <div id="shopList"></div>
+          </div>
+        </div>
+        <div id="pv-today">
         <div class="card">
           <div class="card-head"><h2>🍽️ Today's meals</h2><button class="btn sm" id="newIdeas">↻ New ideas</button></div>
           <div id="planMeals"></div>
@@ -147,6 +172,7 @@
           <div class="card-head"><h2>🏃 Today's workout</h2><span id="planWoMeta" class="pill"></span></div>
           <div id="woChips" class="chips scroll"></div>
           <div id="planWorkout"></div>
+        </div>
         </div>
       </div>
 

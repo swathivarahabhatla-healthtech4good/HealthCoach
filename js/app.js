@@ -114,8 +114,14 @@ function renderToday() {
   const score = dayScore(d, s);
   $("#scoreVal").textContent = `${score}%`;
   $("#scoreRing").style.setProperty("--p", score);
-  const tipIdx = Number(currentKey.replace(/-/g, "")) % COACH_TIPS.length;
-  $("#coachTip").textContent = COACH_TIPS[tipIdx];
+  const mealsDone = MEALS.filter((m) => d.meals[m.id].trim()).length;
+  const checksDone = ALL_CHECK_IDS.filter((id) => d.checks[id]).length;
+  $("#progressList").innerHTML = [
+    ["🍽️ Meals", `${mealsDone}/${MEALS.length}`],
+    ["🏃 Workout", `${d.workout.minutes}/${s.workoutGoal}m`],
+    ["💧 Water", `${d.water}/${s.waterGoal}`],
+    ["✅ Habits", `${checksDone}/${ALL_CHECK_IDS.length}`],
+  ].map(([l, v]) => `<span>${l} <b>${v}</b></span>`).join("");
 
   // water
   const n = Math.max(s.waterGoal, d.water);
@@ -447,8 +453,7 @@ function openPlan() {
   $('#guideSeg [data-view="plan"]').click();
 }
 
-function setPlan(fn) {
-  const k = todayKey();
+function setPlan(fn, k = todayKey()) {
   const d = Store.day(k);
   fn(d);
   Store.setDay(k, d);
@@ -456,7 +461,117 @@ function setPlan(fn) {
   if (currentKey === k) renderToday();
 }
 
+// ---------- week view ----------
+let weekOffset = 0;
+function weekStart(k) {
+  const dow = (parseKey(k).getDay() + 6) % 7; // Monday = 0
+  return addDays(k, -dow);
+}
+function weekKeys() {
+  const start = addDays(weekStart(todayKey()), weekOffset * 7);
+  return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+}
+function fmtShort(k) { return parseKey(k).toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
+
+function renderWeek() {
+  const keys = weekKeys();
+  const today = todayKey();
+  $("#weekLabel").textContent = weekOffset === 0 ? "This week" : weekOffset === 1 ? "Next week" : weekOffset === -1 ? "Last week" : `Week of ${fmtShort(keys[0])}`;
+  $("#weekLabel").nextElementSibling.textContent = `${fmtShort(keys[0])} – ${fmtShort(keys[6])} · tap ↻ to swap`;
+  $("#weekDays").innerHTML = keys.map((k) => {
+    const d = Store.day(k);
+    const wo = plannedWorkout(k, d);
+    const row = (slot, label, name, done, swap) =>
+      `<div class="wk-row"><span class="wk-slot">${label}</span><span class="wk-name ${done ? "done" : ""}">${esc(name)}</span>${swap ? `<button class="wk-swap" data-k="${k}" data-swap="${slot}" aria-label="Swap ${label}">↻</button>` : "<span></span>"}</div>`;
+    return `<div class="card wk-day ${k === today ? "today" : k < today ? "past" : ""}">
+      <div class="wk-head"><h3>${parseKey(k).toLocaleDateString(undefined, { weekday: "long" })} <small>${fmtShort(k)}</small></h3>${k === today ? '<span class="pill done">Today</span>' : ""}</div>
+      ${MEALS.map((m) => { const o = plannedMeal(k, d, m.id); return row(m.id, m.label, o.name, mealHas(d, m.id, o.name), k >= today); }).join("")}
+      ${row("workout", "Workout", `${wo.title} · ${wo.minutes} min`, d.workout.minutes >= wo.minutes, k >= today)}
+    </div>`;
+  }).join("");
+}
+
+// ---------- prep & shopping ----------
+function weekPlanItems() {
+  return weekKeys().flatMap((k) => {
+    const d = Store.day(k);
+    return MEALS.map((m) => ({ k, slot: m.id, opt: plannedMeal(k, d, m.id) }));
+  });
+}
+function dayAbbr(k) { return parseKey(k).toLocaleDateString(undefined, { weekday: "short" }); }
+
+function renderPrep() {
+  const keys = weekKeys();
+  const wk = keys[0];
+  const items = weekPlanItems().filter((x) => x.k >= todayKey() || weekOffset !== 0);
+  const tasks = PREP_RULES.map((r) => {
+    const hits = items.filter((x) => r.match.test(x.opt.name));
+    if (!hits.length) return null;
+    const names = [...new Set(hits.map((x) => x.opt.name))];
+    const days = [...new Set(hits.map((x) => dayAbbr(x.k)))];
+    return { id: r.id, task: r.task, when: r.when, detail: r.detail, forText: `${names.slice(0, 3).join(", ")}${names.length > 3 ? ` +${names.length - 3}` : ""} · ${days.join(" ")}` };
+  }).filter(Boolean);
+  // recipe-specific prep notes
+  const recipes = [...new Map(items.filter((x) => x.opt.recipe && x.opt.recipe.prepNote).map((x) => [x.opt.recipe.id, x])).values()];
+  recipes.forEach((x) => tasks.push({ id: `r:${x.opt.recipe.id}`, task: `Prep: ${x.opt.recipe.title}`, when: dayAbbr(x.k), detail: x.opt.recipe.prepNote, forText: "" }));
+
+  const done = Store.prepDone(wk);
+  const n = tasks.filter((t) => done.includes(t.id)).length;
+  $("#prepMeta").textContent = `${n}/${tasks.length}`;
+  $("#prepMeta").classList.toggle("done", tasks.length > 0 && n === tasks.length);
+  $("#prepSub").textContent = `${weekOffset === 0 ? "Remaining days this week" : $("#weekLabel").textContent} · ${fmtShort(keys[0])} – ${fmtShort(keys[6])}. Change meals in the Week view and this list updates.`;
+  $("#prepTasks").innerHTML = tasks.map((t) => `
+    <li><label><input type="checkbox" data-prep="${esc(t.id)}" ${done.includes(t.id) ? "checked" : ""} />
+      <span><span class="prep-when">${esc(t.when)}</span><span class="cl">${esc(t.task)}</span>
+      <span class="hint">${esc(t.detail)}</span>${t.forText ? `<span class="prep-for">For: ${esc(t.forText)}</span>` : ""}</span></label></li>`).join("")
+    || `<li class="muted">Nothing to prep — the rest of the week is planned with no-cook options.</li>`;
+
+  // shopping list
+  const count = (arr) => arr.reduce((m, x) => m.set(x, (m.get(x) || 0) + 1), new Map());
+  const recipeUses = count(items.filter((x) => x.opt.recipe).map((x) => x.opt.recipe.id));
+  const foodUses = count(items.filter((x) => !x.opt.recipe).map((x) => x.opt.name));
+  const groups = [];
+  recipeUses.forEach((c, id) => {
+    const r = RECIPES.find((x) => x.id === id);
+    groups.push(`<div class="shop-group"><h4>${esc(r.title)}${c > 1 ? ` ×${c}` : ""}</h4><ul>${r.ingredients.map((i) => `<li>${esc(i)}</li>`).join("")}</ul></div>`);
+  });
+  if (foodUses.size) {
+    const byName = Object.fromEntries(FOODS.map((f) => [f.name, f]));
+    groups.push(`<div class="shop-group"><h4>Meals & snacks</h4><ul>${[...foodUses].map(([nm, c]) => `<li>${esc(nm)}${c > 1 ? ` ×${c}` : ""} <span class="muted small">— ${esc(byName[nm]?.serving || "")}</span></li>`).join("")}</ul></div>`);
+  }
+  groups.push(`<div class="shop-group"><h4>Weekly staples</h4><ul>${WEEKLY_STAPLES.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>`);
+  $("#shopList").innerHTML = groups.join("");
+}
+
 function buildPlan() {
+  $("#planSeg").onclick = (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    $$("#planSeg button").forEach((x) => x.classList.toggle("on", x === b));
+    ["today", "week", "prep"].forEach((v) => ($(`#pv-${v}`).hidden = v !== b.dataset.pv));
+    renderPlan();
+  };
+  $("#prevWeek").onclick = () => { weekOffset--; renderPlan(); };
+  $("#nextWeek").onclick = () => { weekOffset++; renderPlan(); };
+  $("#weekDays").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-swap]"); if (!b) return;
+    const k = b.dataset.k, slot = b.dataset.swap;
+    setPlan((d) => {
+      if (slot === "workout") {
+        const i = WORKOUTS.findIndex((w) => w.id === plannedWorkout(k, d).id);
+        d.plan.workout = WORKOUTS[(i + 1) % WORKOUTS.length].id;
+        d.plan.exDone = [];
+      } else {
+        const opts = slotOptions(slot);
+        const i = opts.findIndex((o) => o.key === plannedMeal(k, d, slot).key);
+        d.plan[slot] = opts[(i + 1) % opts.length].key;
+      }
+    }, k);
+  });
+  $("#prepTasks").addEventListener("change", (e) => {
+    const c = e.target.closest("[data-prep]"); if (!c) return;
+    Store.togglePrep(weekKeys()[0], c.dataset.prep);
+    renderPrep();
+  });
   $("#woChips").innerHTML = WORKOUTS.map((w) => `<button class="chip" data-wo="${w.id}">${esc(w.title.split(" — ")[0])}</button>`).join("");
   $("#woChips").onclick = (e) => {
     const b = e.target.closest("button"); if (!b) return;
@@ -500,6 +615,8 @@ function buildPlan() {
 }
 
 function renderPlan() {
+  if (!$("#pv-week").hidden) renderWeek();
+  if (!$("#pv-prep").hidden) { renderWeek(); renderPrep(); }
   const k = todayKey();
   const d = Store.day(k);
   const openRecipes = new Set($$("#planMeals details[open]").map((x) => x.dataset.slot));

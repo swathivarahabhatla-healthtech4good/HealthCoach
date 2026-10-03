@@ -110,7 +110,8 @@ input:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--acc
   width: 58px; height: 58px; border-radius: 50%; background: var(--surface);
   display: grid; place-items: center; font-weight: 700; font-size: 16px;
 }
-.tip { margin: 2px 0 0; color: var(--text-2); }
+.progress-list { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; margin-top: 4px; font-size: 13.5px; }
+.progress-list b { font-weight: 650; }
 
 /* water */
 .glasses { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
@@ -271,3 +272,22 @@ select {
 #planWorkout h3 { margin-top: 4px; }
 #planWorkout .checks { margin: 8px 0; }
 #planWorkout > .btn { width: 100%; }
+
+/* week + prep */
+.seg.sub { background: transparent; border: 1px solid var(--border); }
+.week-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.day-label.sm { font-size: 16px; }
+.wk-day.today { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.wk-day.past { opacity: 0.7; }
+.wk-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.wk-head h3 small { font-weight: 500; color: var(--muted); font-size: 12.5px; }
+.wk-row { display: grid; grid-template-columns: 86px 1fr auto; align-items: center; gap: 8px; padding: 5px 0; border-top: 1px solid var(--border); font-size: 13.5px; }
+.wk-slot { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.wk-name.done { color: var(--muted); }
+.wk-name.done::after { content: " ✓"; color: var(--accent); font-weight: 700; }
+.wk-swap { font: inherit; font-size: 15px; background: none; border: 0; color: var(--accent); cursor: pointer; padding: 2px 6px; }
+.prep-when { font-size: 11.5px; font-weight: 650; color: var(--accent); }
+.prep-for { font-size: 12px; color: var(--text-2); margin-top: 2px; }
+.shop-group { margin-bottom: 10px; }
+.shop-group h4 { margin-top: 0; }
+.shop-group ul { margin: 2px 0; padding-left: 18px; font-size: 13.5px; }
