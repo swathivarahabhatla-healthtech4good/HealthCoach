@@ -1,0 +1,389 @@
+/* Health Coach UI: Today / Trends / Food guide tabs. */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+let currentKey = todayKey();
+let range = 7;
+
+// ================= Tabs =================
+function showTab(name) {
+  $$(".tabbar button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+  $$(".tab").forEach((t) => (t.hidden = t.id !== `tab-${name}`));
+  Charts.hideTip();
+  if (name === "trends") renderTrends();
+  window.scrollTo(0, 0);
+  try { localStorage.setItem("healthcoach.tab", name); } catch {}
+}
+$$(".tabbar button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+
+// ================= TODAY =================
+function getDay() { return Store.day(currentKey); }
+function update(fn) {
+  const d = getDay();
+  fn(d);
+  Store.setDay(currentKey, d);
+  renderToday();
+}
+
+function fmtLong(k) {
+  return parseKey(k).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+}
+
+function buildTodayStatic() {
+  $("#prevDay").onclick = () => { currentKey = addDays(currentKey, -1); renderToday(); };
+  $("#nextDay").onclick = () => { if (currentKey < todayKey()) { currentKey = addDays(currentKey, 1); renderToday(); } };
+
+  $("#waterPlus").onclick = () => update((d) => (d.water = Math.min(30, d.water + 1)));
+  $("#waterMinus").onclick = () => update((d) => (d.water = Math.max(0, d.water - 1)));
+
+  const scale = (host, key, items) => {
+    host.innerHTML = items.map((m) =>
+      `<button role="radio" data-v="${m.v}" aria-label="${m.l}"><span class="e">${m.e}</span><span class="small">${m.l}</span></button>`).join("");
+    host.onclick = (e) => {
+      const b = e.target.closest("button"); if (!b) return;
+      const v = Number(b.dataset.v);
+      update((d) => (d[key] = d[key] === v ? 0 : v));
+    };
+  };
+  scale($("#moodPick"), "mood", MOODS);
+  scale($("#energyPick"), "energy", [1, 2, 3, 4, 5].map((v) => ({ v, e: "⚡".repeat(v), l: ["Drained", "Low", "Okay", "Good", "Buzzing"][v - 1] })));
+  $("#sleepIn").onchange = (e) => update((d) => (d.sleep = Number(e.target.value) || 0));
+
+  $("#workoutTypes").innerHTML = WORKOUT_TYPES.map((t) => `<button class="chip" data-t="${t}">${t}</button>`).join("");
+  $("#workoutTypes").onclick = (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    update((d) => (d.workout.type = d.workout.type === b.dataset.t ? "" : b.dataset.t));
+  };
+  $("#workoutMin").onchange = (e) => update((d) => (d.workout.minutes = Number(e.target.value) || 0));
+  $("#steps").onchange = (e) => update((d) => (d.workout.steps = Number(e.target.value) || 0));
+
+  $("#foodSuggest").innerHTML = FOODS.map((f) => `<option value="${esc(f.name)}">`).join("");
+  $("#mealInputs").innerHTML = MEALS.map((m) =>
+    `<label class="meal"><span class="field-label">${m.label}</span><input data-meal="${m.id}" list="foodSuggest" placeholder="e.g. ${esc(sampleFor(m.id))}" /></label>`).join("");
+  $$("#mealInputs input").forEach((i) => (i.onchange = () => update((d) => (d.meals[i.dataset.meal] = i.value))));
+
+  $("#checkGroups").innerHTML = CHECKLIST_GROUPS.map((g) => `
+    <details class="card group" open data-g="${g.id}">
+      <summary class="card-head"><h2>${g.icon} ${g.title}</h2><span class="pill" data-gp="${g.id}"></span></summary>
+      <ul class="checks">
+        ${g.items.map((i) => `
+          <li><label>
+            <input type="checkbox" data-c="${i.id}" />
+            <span><span class="cl">${i.label}</span>${i.hint ? `<span class="hint">${i.hint}</span>` : ""}</span>
+          </label></li>`).join("")}
+      </ul>
+    </details>`).join("");
+  $$("#checkGroups input[type=checkbox]").forEach((c) => (c.onchange = () => update((d) => (d.checks[c.dataset.c] = c.checked))));
+
+  $("#weightIn").onchange = (e) => update((d) => (d.weight = e.target.value === "" ? null : Number(e.target.value)));
+  $("#notesIn").onchange = (e) => update((d) => (d.notes = e.target.value));
+}
+
+function sampleFor(meal) {
+  return { breakfast: "Veggie egg bhurji", lunch: "Dal + sabzi + millet roti", snacks: "Roasted chana", dinner: "Lentil soup" }[meal];
+}
+
+function pickIdeas() {
+  const h = new Date().getHours();
+  const cat = h < 11 ? ["breakfast", "ready"] : h < 16 ? ["meal", "ready", "snack"] : h < 19 ? ["snack", "drink"] : ["meal", "drink"];
+  const pool = FOODS.filter((f) => cat.includes(f.cat) && (f.tags.includes("ready") || f.tags.includes("quick")));
+  // stable per day so chips don't reshuffle on every tap
+  const seed = Number(currentKey.replace(/-/g, ""));
+  return pool.map((f, i) => ({ f, r: Math.sin(seed + i) })).sort((a, b) => a.r - b.r).slice(0, 6).map((x) => x.f);
+}
+
+function renderToday() {
+  const d = getDay();
+  const s = Store.settings;
+  const isToday = currentKey === todayKey();
+  $("#dayLabel").textContent = isToday ? "Today" : fmtLong(currentKey);
+  $("#daySub").textContent = isToday ? fmtLong(currentKey) : "Editing a past day";
+  $("#nextDay").disabled = isToday;
+
+  const score = dayScore(d, s);
+  $("#scoreVal").textContent = `${score}%`;
+  $("#scoreRing").style.setProperty("--p", score);
+  const tipIdx = Number(currentKey.replace(/-/g, "")) % COACH_TIPS.length;
+  $("#coachTip").textContent = COACH_TIPS[tipIdx];
+
+  // water
+  const n = Math.max(s.waterGoal, d.water);
+  $("#waterGlasses").innerHTML = Array.from({ length: n }, (_, i) =>
+    `<button class="glass ${i < d.water ? "full" : ""}" data-i="${i}" aria-label="Set ${i + 1} glasses"></button>`).join("");
+  $$("#waterGlasses .glass").forEach((g) => (g.onclick = () => update((x) => {
+    const v = Number(g.dataset.i) + 1;
+    x.water = x.water === v ? v - 1 : v;
+  })));
+  $("#waterText").textContent = `${d.water}/${s.waterGoal} · ${((d.water * s.glassMl) / 1000).toFixed(2)} L`;
+
+  $$("#moodPick button").forEach((b) => b.setAttribute("aria-checked", String(Number(b.dataset.v) === d.mood)));
+  $$("#energyPick button").forEach((b) => b.setAttribute("aria-checked", String(Number(b.dataset.v) === d.energy)));
+  $("#sleepIn").value = d.sleep || "";
+
+  $$("#workoutTypes .chip").forEach((c) => c.classList.toggle("on", c.dataset.t === d.workout.type));
+  $("#workoutMin").value = d.workout.minutes || "";
+  $("#steps").value = d.workout.steps || "";
+  $("#workoutText").textContent = `${d.workout.minutes}/${s.workoutGoal} min`;
+
+  $$("#mealInputs input").forEach((i) => (i.value = d.meals[i.dataset.meal] || ""));
+  $("#quickIdeas").innerHTML = pickIdeas().map((f) =>
+    `<button class="chip idea" title="${esc(f.why)}" data-name="${esc(f.name)}">${esc(f.name)}</button>`).join("");
+  $("#quickIdeas").onclick = (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    const h = new Date().getHours();
+    const meal = h < 11 ? "breakfast" : h < 15 ? "lunch" : h < 19 ? "snacks" : "dinner";
+    update((x) => (x.meals[meal] = x.meals[meal] ? `${x.meals[meal]}, ${b.dataset.name}` : b.dataset.name));
+  };
+
+  $$("#checkGroups input[type=checkbox]").forEach((c) => (c.checked = !!d.checks[c.dataset.c]));
+  CHECKLIST_GROUPS.forEach((g) => {
+    const done = g.items.filter((i) => d.checks[i.id]).length;
+    const pill = $(`[data-gp="${g.id}"]`);
+    pill.textContent = `${done}/${g.items.length}`;
+    pill.classList.toggle("done", done === g.items.length);
+  });
+
+  $("#weightIn").value = d.weight ?? "";
+  $("#notesIn").value = d.notes;
+}
+
+// ================= TRENDS =================
+function rangeKeys(n) {
+  const end = todayKey();
+  return Array.from({ length: n }, (_, i) => addDays(end, i - n + 1));
+}
+
+function renderTrends() {
+  const s = Store.settings;
+  const keys = rangeKeys(range);
+  const days = keys.map((k) => ({ k, d: Store.day(k) })).map((x) => ({ ...x, has: dayHasData(x.d) }));
+  const logged = days.filter((x) => x.has);
+  $("#trendEmpty").hidden = logged.length > 0;
+
+  const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
+  const shortFmt = (k) => {
+    const d = parseKey(k);
+    return range <= 7 ? d.toLocaleDateString(undefined, { weekday: "short" }) : `${d.getMonth() + 1}/${d.getDate()}`;
+  };
+  const pts = (fn) => days.map((x) => ({ short: shortFmt(x.k), long: fmtLong(x.k), value: x.has ? fn(x.d) : null }));
+
+  // streak: consecutive logged days ending today (or yesterday if today is empty)
+  let streak = 0;
+  let k = todayKey();
+  if (!dayHasData(Store.day(k))) k = addDays(k, -1);
+  while (dayHasData(Store.day(k))) { streak++; k = addDays(k, -1); }
+
+  const weights = logged.filter((x) => x.d.weight != null);
+  const wChange = weights.length > 1 ? weights[weights.length - 1].d.weight - weights[0].d.weight : null;
+  const moods = logged.filter((x) => x.d.mood > 0).map((x) => x.d.mood);
+
+  const tiles = [
+    { l: "Avg daily score", v: logged.length ? `${Math.round(avg(logged.map((x) => dayScore(x.d, s))))}%` : "—" },
+    { l: "Current streak", v: `${streak} day${streak === 1 ? "" : "s"}` },
+    { l: "Avg water", v: logged.length ? `${avg(logged.map((x) => x.d.water)).toFixed(1)} gl` : "—" },
+    { l: "Workout days", v: `${logged.filter((x) => x.d.workout.minutes > 0).length}/${range}` },
+    { l: "Avg mood", v: moods.length ? `${MOODS[Math.round(avg(moods)) - 1].e} ${avg(moods).toFixed(1)}` : "—" },
+    { l: "Weight change", v: wChange == null ? "—" : `${wChange > 0 ? "+" : ""}${wChange.toFixed(1)}` },
+  ];
+  $("#statTiles").innerHTML = tiles.map((t) => `<div class="tile"><div class="tv">${t.v}</div><div class="tl">${t.l}</div></div>`).join("");
+
+  const charts = [
+    { id: "score", title: "Daily score", sub: "% of goals met", type: "bar", p: pts((d) => dayScore(d, s)), o: { max: 100, goal: 80, fmt: (v) => `${Math.round(v)}%` } },
+    { id: "water", title: "Water", sub: "glasses", type: "bar", p: pts((d) => d.water), o: { goal: s.waterGoal, tipFmt: (v) => `${v} glasses · ${((v * s.glassMl) / 1000).toFixed(2)} L` } },
+    { id: "workout", title: "Workout", sub: "minutes", type: "bar", p: pts((d) => d.workout.minutes), o: { goal: s.workoutGoal, tipFmt: (v) => `${v} min` } },
+    { id: "plate", title: "Anti-inflammatory plate", sub: "% of plate habits", type: "bar", p: pts((d) => groupScore(d, "plate")), o: { max: 100, fmt: (v) => `${Math.round(v)}%` } },
+    { id: "mood", title: "Mood", sub: "1 low – 5 great", type: "line", p: pts((d) => d.mood || null), o: { min: 1, max: 5, fmt: (v) => String(v), tipFmt: (v) => `${MOODS[v - 1].e} ${MOODS[v - 1].l}` } },
+    { id: "energy", title: "Energy", sub: "1 drained – 5 buzzing", type: "line", p: pts((d) => d.energy || null), o: { min: 1, max: 5, fmt: (v) => String(v) } },
+    { id: "sleep", title: "Sleep", sub: "hours", type: "bar", p: pts((d) => d.sleep || null), o: { goal: s.sleepGoal, fmt: (v) => String(Math.round(v * 10) / 10), tipFmt: (v) => `${v} h` } },
+    { id: "weight", title: "Weight", sub: "", type: "line", p: pts((d) => d.weight), o: {} },
+  ];
+  $("#charts").innerHTML = charts.map((c) =>
+    `<div class="card"><div class="card-head"><h2>${c.title}</h2><span class="muted small">${c.sub}</span></div><div class="chart-box" id="ch-${c.id}"></div></div>`).join("");
+  charts.forEach((c) => {
+    const host = $(`#ch-${c.id}`);
+    const n = c.p.filter((p) => p.value != null).length;
+    if (!n) { host.closest(".card").hidden = c.id === "weight" || !logged.length; host.innerHTML = `<p class="muted small">No entries in this range.</p>`; return; }
+    Charts[c.type](host, c.p, { ...c.o, label: c.title });
+  });
+
+  // habit consistency
+  const denom = Math.max(1, logged.length);
+  $("#habitBars").innerHTML = CHECKLIST_GROUPS.map((g) => `
+    <div class="hb-group">${g.icon} ${g.title}</div>
+    ${g.items.map((i) => {
+      const pct = Math.round((logged.filter((x) => x.d.checks[i.id]).length / denom) * 100);
+      return `<div class="hb"><span class="hb-l">${i.label}</span><span class="hb-track"><span class="hb-fill" style="width:${pct}%"></span></span><span class="hb-v">${pct}%</span></div>`;
+    }).join("")}`).join("");
+
+  // heatmap: 12 weeks ending this week, columns = weeks, rows = Mon..Sun
+  const today = parseKey(todayKey());
+  const dow = (today.getDay() + 6) % 7;
+  const start = addDays(todayKey(), -dow - 7 * 11);
+  let cells = "";
+  for (let w = 0; w < 12; w++) {
+    for (let r = 0; r < 7; r++) {
+      const key = addDays(start, w * 7 + r);
+      if (key > todayKey()) { cells += `<i class="hm future"></i>`; continue; }
+      const d = Store.day(key);
+      const has = dayHasData(d);
+      const sc = has ? dayScore(d, s) : 0;
+      const lvl = !has ? 0 : sc < 25 ? 1 : sc < 50 ? 2 : sc < 75 ? 3 : 4;
+      cells += `<i class="hm h${lvl}" data-tip="${esc(fmtLong(key))}: ${has ? sc + "%" : "no entry"}"></i>`;
+    }
+  }
+  $("#heatmap").innerHTML = cells;
+
+  // data table (most recent first)
+  $("#dataTable").innerHTML = `<thead><tr><th>Date</th><th>Score</th><th>Water</th><th>Workout</th><th>Mood</th><th>Energy</th><th>Sleep</th><th>Weight</th></tr></thead><tbody>` +
+    logged.slice().reverse().map((x) => `<tr><td>${x.k}</td><td>${dayScore(x.d, s)}%</td><td>${x.d.water}</td><td>${x.d.workout.minutes}${x.d.workout.type ? " " + esc(x.d.workout.type) : ""}</td><td>${x.d.mood || ""}</td><td>${x.d.energy || ""}</td><td>${x.d.sleep || ""}</td><td>${x.d.weight ?? ""}</td></tr>`).join("") + "</tbody>";
+
+  // settings
+  $("#setWater").value = s.waterGoal;
+  $("#setGlass").value = s.glassMl;
+  $("#setWorkout").value = s.workoutGoal;
+  $("#setSteps").value = s.stepsGoal;
+}
+
+function buildTrendsStatic() {
+  $("#rangeSeg").onclick = (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    range = Number(b.dataset.range);
+    $$("#rangeSeg button").forEach((x) => x.classList.toggle("on", x === b));
+    renderTrends();
+  };
+  const bind = (id, key) => ($(id).onchange = (e) => { Store.setSettings({ [key]: Number(e.target.value) }); renderTrends(); renderToday(); });
+  bind("#setWater", "waterGoal"); bind("#setGlass", "glassMl"); bind("#setWorkout", "workoutGoal"); bind("#setSteps", "stepsGoal");
+
+  $("#exportBtn").onclick = () => {
+    const blob = new Blob([Store.exportJSON()], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `health-coach-backup-${todayKey()}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  $("#importIn").onchange = async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    try { Store.importJSON(await f.text()); renderToday(); renderTrends(); alert("Backup restored."); }
+    catch (err) { alert(`Could not import: ${err.message}`); }
+    e.target.value = "";
+  };
+
+  const hm = $("#heatmap");
+  const show = (e) => {
+    const t = e.target.closest("[data-tip]");
+    if (!t) return Charts.hideTip();
+    const tip = $("#tooltip"); tip.textContent = t.dataset.tip; tip.hidden = false;
+    tip.style.left = `${Math.min(e.clientX + 12, window.innerWidth - 180)}px`; tip.style.top = `${e.clientY - 40}px`;
+  };
+  hm.addEventListener("pointermove", show);
+  hm.addEventListener("pointerdown", show);
+  hm.addEventListener("pointerleave", Charts.hideTip);
+
+  let rt;
+  window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { if (!$("#tab-trends").hidden) renderTrends(); }, 150); });
+}
+
+// ================= FOOD GUIDE =================
+const guide = { cat: "all", tags: new Set(), q: "", favOnly: false, source: "all", rq: "" };
+
+function buildGuide() {
+  $("#guideSeg").onclick = (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    $$("#guideSeg button").forEach((x) => x.classList.toggle("on", x === b));
+    ["foods", "recipes", "limit"].forEach((v) => ($(`#guide-${v}`).hidden = v !== b.dataset.view));
+  };
+
+  $("#catChips").innerHTML = [{ id: "all", label: "All" }, { id: "fav", label: "★ Favourites" }, ...FOOD_CATEGORIES]
+    .map((c) => `<button class="chip ${c.id === "all" ? "on" : ""}" data-cat="${c.id}">${c.label}</button>`).join("");
+  $("#catChips").onclick = (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    guide.cat = b.dataset.cat;
+    $$("#catChips .chip").forEach((x) => x.classList.toggle("on", x === b));
+    renderFoods();
+  };
+  $("#tagChips").innerHTML = Object.entries(TAG_LABELS).map(([k, l]) => `<button class="chip tag" data-tag="${k}">${l}</button>`).join("");
+  $("#tagChips").onclick = (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    const t = b.dataset.tag;
+    guide.tags.has(t) ? guide.tags.delete(t) : guide.tags.add(t);
+    b.classList.toggle("on");
+    renderFoods();
+  };
+  $("#foodSearch").oninput = (e) => { guide.q = e.target.value.toLowerCase(); renderFoods(); };
+  $("#foodList").onclick = (e) => {
+    const b = e.target.closest(".fav"); if (!b) return;
+    Store.toggleFavorite(b.dataset.id); renderFoods();
+  };
+
+  $("#sourceChips").innerHTML = [{ id: "all", name: "All sources" }, ...RECIPE_SOURCES]
+    .map((s) => `<button class="chip ${s.id === "all" ? "on" : ""}" data-src="${s.id}">${esc(s.name)}</button>`).join("");
+  $("#sourceChips").onclick = (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    guide.source = b.dataset.src;
+    $$("#sourceChips .chip").forEach((x) => x.classList.toggle("on", x === b));
+    renderRecipes();
+  };
+  $("#recipeSearch").oninput = (e) => { guide.rq = e.target.value.toLowerCase(); renderRecipes(); };
+
+  const lvl = { time: ["⏰", "Time it"], moderate: ["⚖️", "Moderate"], avoid: ["⛔", "Avoid / minimise"] };
+  $("#limitList").innerHTML = ["time", "moderate", "avoid"].map((L) => `
+    <div class="card"><h2>${lvl[L][0]} ${lvl[L][1]}</h2>
+      ${LIMIT_FOODS.filter((f) => f.level === L).map((f) => `<div class="limit"><b>${esc(f.name)}</b><p>${esc(f.why)}</p></div>`).join("")}
+    </div>`).join("");
+
+  renderFoods();
+  renderRecipes();
+}
+
+function renderFoods() {
+  const favs = Store.favorites;
+  const list = FOODS.filter((f) =>
+    (guide.cat === "all" || (guide.cat === "fav" ? favs.includes(f.name) : f.cat === guide.cat)) &&
+    [...guide.tags].every((t) => f.tags.includes(t)) &&
+    (!guide.q || `${f.name} ${f.why}`.toLowerCase().includes(guide.q)));
+  const catLabel = Object.fromEntries(FOOD_CATEGORIES.map((c) => [c.id, c.label]));
+  $("#foodList").innerHTML = list.length ? list.map((f) => `
+    <article class="food card">
+      <div class="food-top">
+        <div><h3>${esc(f.name)}</h3><div class="muted small">${catLabel[f.cat]} · ${esc(f.serving)}</div></div>
+        <button class="fav ${favs.includes(f.name) ? "on" : ""}" data-id="${esc(f.name)}" aria-label="Favourite">${favs.includes(f.name) ? "★" : "☆"}</button>
+      </div>
+      <p>${esc(f.why)}</p>
+      <div class="tags">${f.tags.map((t) => `<span class="t t-${t}">${TAG_LABELS[t]}</span>`).join("")}</div>
+    </article>`).join("") : `<p class="muted">No foods match those filters.</p>`;
+}
+
+function renderRecipes() {
+  const srcName = Object.fromEntries(RECIPE_SOURCES.map((s) => [s.id, s.name]));
+  const list = RECIPES.filter((r) =>
+    (guide.source === "all" || r.source === guide.source) &&
+    (!guide.rq || `${r.title} ${r.ingredients.join(" ")}`.toLowerCase().includes(guide.rq)));
+  $("#recipeList").innerHTML = list.length ? list.map((r) => `
+    <details class="card recipe">
+      <summary>
+        <h3>${esc(r.title)}</h3>
+        <div class="muted small">${r.time} min · serves ${r.serves} · ${esc(srcName[r.source] || r.source)}</div>
+        <div class="tags">${r.tags.map((t) => `<span class="t t-${t}">${TAG_LABELS[t]}</span>`).join("")}</div>
+      </summary>
+      ${r.prepNote ? `<p class="prep">🍱 ${esc(r.prepNote)}</p>` : ""}
+      ${r.thyroidNote ? `<p class="thy">💊 ${esc(r.thyroidNote)}</p>` : ""}
+      <h4>Ingredients</h4><ul>${r.ingredients.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>
+      <h4>Steps</h4><ol>${r.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>
+      ${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">View original recipe ↗</a>` : ""}
+    </details>`).join("") : `<p class="muted">No recipes from this source yet.</p>`;
+}
+
+// ================= boot =================
+buildTodayStatic();
+buildTrendsStatic();
+buildGuide();
+renderToday();
+let startTab = "today";
+try { startTab = localStorage.getItem("healthcoach.tab") || "today"; } catch {}
+showTab(["today", "trends", "guide"].includes(startTab) ? startTab : "today");
+
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}

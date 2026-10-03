@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Health Coach</title>
+  <meta name="description" content="Personal anti-inflammatory, thyroid-aware health coach: daily checklist, trends and food reference." />
+  <meta name="theme-color" content="#1f6f4a" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>🌿 Health Coach</h1>
+  </header>
+
+  <main>
+    <!-- ============ TAB 1: TODAY ============ -->
+    <section id="tab-today" class="tab" aria-labelledby="nav-today">
+      <div class="day-nav">
+        <button class="icon-btn" id="prevDay" aria-label="Previous day">‹</button>
+        <div class="day-title">
+          <div id="dayLabel" class="day-label"></div>
+          <div id="daySub" class="muted small"></div>
+        </div>
+        <button class="icon-btn" id="nextDay" aria-label="Next day">›</button>
+      </div>
+
+      <div class="card score-card">
+        <div class="ring" id="scoreRing"><span id="scoreVal">0%</span></div>
+        <div>
+          <div class="muted small">Coach tip</div>
+          <p id="coachTip" class="tip"></p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>💧 Water</h2><span id="waterText" class="muted"></span></div>
+        <div id="waterGlasses" class="glasses"></div>
+        <div class="row gap">
+          <button class="btn" id="waterMinus">− glass</button>
+          <button class="btn primary" id="waterPlus">+ glass</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>🙂 Mood, energy & sleep</h2></div>
+        <div class="field-label">Mood</div>
+        <div id="moodPick" class="pick" role="radiogroup" aria-label="Mood"></div>
+        <div class="field-label">Energy</div>
+        <div id="energyPick" class="pick" role="radiogroup" aria-label="Energy"></div>
+        <label class="field-label" for="sleepIn">Sleep last night (hours)</label>
+        <input id="sleepIn" type="number" min="0" max="14" step="0.5" inputmode="decimal" />
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>🏃 Workout</h2><span id="workoutText" class="muted"></span></div>
+        <div id="workoutTypes" class="chips"></div>
+        <div class="grid2">
+          <label><span class="field-label">Minutes</span><input id="workoutMin" type="number" min="0" step="5" inputmode="numeric" /></label>
+          <label><span class="field-label">Steps</span><input id="steps" type="number" min="0" step="500" inputmode="numeric" /></label>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>🍽️ Meals</h2><span class="muted small">What did you eat?</span></div>
+        <div id="mealInputs"></div>
+        <datalist id="foodSuggest"></datalist>
+        <div class="field-label">Ready-to-eat ideas right now</div>
+        <div id="quickIdeas" class="chips"></div>
+      </div>
+
+      <div id="checkGroups"></div>
+
+      <div class="card">
+        <div class="card-head"><h2>📓 Notes & weight</h2></div>
+        <label><span class="field-label">Weight (optional)</span><input id="weightIn" type="number" step="0.1" inputmode="decimal" placeholder="e.g. 72.5" /></label>
+        <label><span class="field-label">Notes — symptoms, cravings, wins</span><textarea id="notesIn" rows="3"></textarea></label>
+      </div>
+    </section>
+
+    <!-- ============ TAB 2: TRENDS ============ -->
+    <section id="tab-trends" class="tab" hidden aria-labelledby="nav-trends">
+      <div class="seg" role="tablist" aria-label="Date range" id="rangeSeg">
+        <button data-range="7" class="on">7 days</button>
+        <button data-range="30">30 days</button>
+        <button data-range="90">90 days</button>
+      </div>
+
+      <div id="statTiles" class="tiles"></div>
+
+      <div id="trendEmpty" class="card empty" hidden>
+        <p>No history yet. Fill in the <b>Today</b> tab for a few days and your trends will appear here.</p>
+      </div>
+
+      <div id="charts"></div>
+
+      <div class="card">
+        <div class="card-head"><h2>Habit consistency</h2><span class="muted small">% of days done</span></div>
+        <div id="habitBars"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Last 12 weeks</h2><span class="muted small">Daily score</span></div>
+        <div id="heatmap" class="heatmap"></div>
+        <div class="legend-scale"><span>0%</span><i class="h0"></i><i class="h1"></i><i class="h2"></i><i class="h3"></i><i class="h4"></i><span>100%</span></div>
+      </div>
+
+      <details class="card">
+        <summary><h2 class="inline">Data table</h2></summary>
+        <div class="table-wrap"><table id="dataTable"></table></div>
+      </details>
+
+      <details class="card">
+        <summary><h2 class="inline">Goals & backup</h2></summary>
+        <div class="grid2">
+          <label><span class="field-label">Water goal (glasses)</span><input id="setWater" type="number" min="1" /></label>
+          <label><span class="field-label">Glass size (ml)</span><input id="setGlass" type="number" min="50" step="50" /></label>
+          <label><span class="field-label">Workout goal (min)</span><input id="setWorkout" type="number" min="5" step="5" /></label>
+          <label><span class="field-label">Steps goal</span><input id="setSteps" type="number" min="1000" step="500" /></label>
+        </div>
+        <div class="row gap wrap">
+          <button class="btn" id="exportBtn">Export backup</button>
+          <label class="btn">Import backup<input id="importIn" type="file" accept="application/json" hidden /></label>
+        </div>
+        <p class="muted small">Your data is stored only in this browser. Export regularly to keep a backup.</p>
+      </details>
+    </section>
+
+    <!-- ============ TAB 3: FOOD GUIDE ============ -->
+    <section id="tab-guide" class="tab" hidden aria-labelledby="nav-guide">
+      <div class="seg" id="guideSeg">
+        <button data-view="foods" class="on">Foods</button>
+        <button data-view="recipes">Recipes</button>
+        <button data-view="limit">Limits</button>
+      </div>
+
+      <div id="guide-foods">
+        <input id="foodSearch" type="search" placeholder="Search foods, snacks, drinks…" aria-label="Search foods" />
+        <div id="catChips" class="chips scroll"></div>
+        <div id="tagChips" class="chips scroll"></div>
+        <div id="foodList" class="list"></div>
+      </div>
+
+      <div id="guide-recipes" hidden>
+        <input id="recipeSearch" type="search" placeholder="Search recipes…" aria-label="Search recipes" />
+        <div id="sourceChips" class="chips scroll"></div>
+        <div id="recipeList" class="list"></div>
+        <p class="muted small">More recipes from your favourite sites coming soon.</p>
+      </div>
+
+      <div id="guide-limit" hidden>
+        <div class="card">
+          <h2>💊 Thyroid timing rules</h2>
+          <ul class="rules">
+            <li>Take the pill on waking with <b>water only</b>, same time every day.</li>
+            <li>Wait <b>30–60 min</b> before breakfast, coffee or tea.</li>
+            <li>Keep <b>calcium, iron, soy and high-fiber supplements 4 h</b> away from the pill.</li>
+            <li>Eat consistently — big changes in fiber or soy can change how much medicine you absorb.</li>
+            <li>Get TSH checked as your doctor advises, especially after weight change.</li>
+          </ul>
+        </div>
+        <div id="limitList" class="list"></div>
+        <p class="muted small disclaimer">General guidance only, not medical advice. Check diet and supplement changes with your doctor or dietitian.</p>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabbar" role="tablist" aria-label="Sections">
+    <button role="tab" id="nav-today" data-tab="today" aria-selected="true"><span>✅</span>Today</button>
+    <button role="tab" id="nav-trends" data-tab="trends" aria-selected="false"><span>📈</span>Trends</button>
+    <button role="tab" id="nav-guide" data-tab="guide" aria-selected="false"><span>🥑</span>Food guide</button>
+  </nav>
+
+  <div id="tooltip" class="tooltip" role="status" hidden></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/recipes.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
