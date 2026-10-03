@@ -39,6 +39,7 @@
 }
 
 * { box-sizing: border-box; }
+:root { padding-top: env(safe-area-inset-top, 0px); }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
@@ -58,9 +59,10 @@ p { margin: 6px 0; }
 .inline { display: inline; }
 
 .topbar {
-  position: sticky; top: 0; z-index: 5;
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
   background: var(--accent); color: var(--accent-ink);
-  padding: 12px 16px; padding-top: calc(12px + env(safe-area-inset-top));
+  padding: 12px 16px;
 }
 main { max-width: 720px; margin: 0 auto; padding: 12px 16px; }
 
@@ -306,3 +308,6 @@ select {
 .fold[open] > summary.card-head { margin-bottom: 8px; }
 .fold > summary h2::before { content: "▸ "; color: var(--muted); }
 .fold[open] > summary h2::before { content: "▾ "; }
+.sync { font-size: 11.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: rgb(255 255 255 / 0.18); white-space: nowrap; }
+.sync[data-kind="warn"] { background: var(--surface); color: var(--warn); }
+#copyBuyText, .to-buy + textarea { margin-top: 6px; }

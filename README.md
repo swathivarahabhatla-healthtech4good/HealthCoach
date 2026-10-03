@@ -10,9 +10,11 @@ A personal, mobile-friendly health coach for a vegetarian (eats eggs) with hypot
 **Thursday pantry check** — every Thursday the Today tab shows the key ingredients (chickpeas, rajma, dals, millets, paneer, eggs…) needed for the coming Friday/Sunday prep. Tick what you have; copy the rest as a to-buy list. **Foods**: searchable foods/snacks/drinks/ready-to-eat list with tags and favourites, recipes (starter set + favourite sites), and foods to limit or time around the thyroid pill.
 
 ## Run
-No build step. Open `index.html` in a browser, or serve the folder (e.g. `python3 -m http.server`) and add it to your phone's home screen. You can also host it on GitHub Pages.
+**On claude.ai (recommended):** the app is published as a private artifact at https://claude.ai/artifact/WJigqkJXKkyDrCet3Tpj6h. Data syncs to your private space in the artifact's database, so it follows you across phone and laptop. To republish after changes, run `python3 tools/build-artifact.py` and publish `dist/health-coach.html` to the same artifact.
 
-Data is stored in your browser only (`localStorage`). Use **Trends → Goals & backup → Export** to keep a backup.
+**Locally:** No build step. Open `index.html` in a browser, or serve the folder (e.g. `python3 -m http.server`) and add it to your phone's home screen. You can also host it on GitHub Pages.
+
+Opened locally, data is stored in your browser only (`localStorage`). Use **Trends → Goals & backup → Export** to keep a backup.
 
 ## Editing content
 - Checklist items, foods, limits and tips: `js/data.js`

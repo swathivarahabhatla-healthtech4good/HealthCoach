@@ -290,18 +290,33 @@ function buildTrendsStatic() {
   const bind = (id, key) => ($(id).onchange = (e) => { Store.setSettings({ [key]: Number(e.target.value) }); renderTrends(); renderToday(); });
   bind("#setWater", "waterGoal"); bind("#setGlass", "glassMl"); bind("#setWorkout", "workoutGoal"); bind("#setSteps", "stepsGoal");
 
-  $("#exportBtn").onclick = () => {
-    const blob = new Blob([Store.exportJSON()], { type: "application/json" });
+  const msg = (t) => ($("#backupMsg").textContent = t);
+  $("#exportBtn").onclick = async () => {
+    const filename = `health-coach-backup-${todayKey()}.json`;
+    const json = Store.exportJSON();
+    if (window.claude && typeof window.claude.use === "function") {
+      // inside claude.ai, plain download links are blocked; ask the viewer to save instead
+      const downloads = await window.claude.use("downloads");
+      if (downloads) {
+        try { await downloads.save({ filename, data: json }); msg("Backup saved."); }
+        catch { msg("Backup not saved."); }
+        return;
+      }
+      try { await navigator.clipboard.writeText(json); msg("Backup copied to the clipboard. Paste it into a note or file to keep it."); }
+      catch { msg("Could not export here. Open the app from GitHub to download a backup."); }
+      return;
+    }
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `health-coach-backup-${todayKey()}.json`;
+    a.href = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(a.href);
+    msg("Backup downloaded.");
   };
   $("#importIn").onchange = async (e) => {
     const f = e.target.files[0]; if (!f) return;
-    try { Store.importJSON(await f.text()); renderToday(); renderTrends(); alert("Backup restored."); }
-    catch (err) { alert(`Could not import: ${err.message}`); }
+    try { Store.importJSON(await f.text()); renderToday(); renderTrends(); msg("Backup restored."); }
+    catch (err) { msg(`Could not import: ${err.message}. Choose a file exported from Health Coach.`); }
     e.target.value = "";
   };
 
@@ -641,7 +656,13 @@ function renderPantry(host, metaEl) {
   const btn = host.querySelector("[data-copybuy]");
   if (btn) btn.onclick = async () => {
     const text = `Groceries for prep (${fmtShort(keys[0])}):\n` + need.map((x) => `- ${x.name}`).join("\n") + "\n" + WEEKLY_STAPLES.map((x) => `- ${x}`).join("\n");
-    try { await navigator.clipboard.writeText(text); btn.textContent = "✓ Copied"; } catch { prompt("Copy this list:", text); }
+    try { await navigator.clipboard.writeText(text); btn.textContent = "✓ Copied"; }
+    catch {
+      const ta = document.createElement("textarea");
+      ta.readOnly = true; ta.rows = 6; ta.value = text;
+      btn.replaceWith(ta);
+      ta.select();
+    }
   };
 }
 
@@ -792,6 +813,13 @@ let startTab = "today";
 try { startTab = localStorage.getItem("healthcoach.tab") || "today"; } catch {}
 showTab(["today", "trends", "guide"].includes(startTab) ? startTab : "today");
 
-if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+Cloud.start(() => {
+  renderToday();
+  if (!$("#tab-trends").hidden) renderTrends();
+  renderPlan();
+  renderFoods();
+});
+
+if (!window.claude && "serviceWorker" in navigator && location.protocol.startsWith("http")) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }

@@ -1,5 +1,5 @@
 // Offline cache: network-first so updates show up, cache as fallback.
-const CACHE = "healthcoach-v5";
+const CACHE = "healthcoach-v6";
 const ASSETS = ["./", "index.html", "css/styles.css", "js/data.js", "js/recipes.js", "js/store.js", "js/charts.js", "js/app.js", "manifest.webmanifest", "icon.svg"];
 self.addEventListener("install", (e) => e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS))));
 self.addEventListener("activate", (e) => e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k))))));

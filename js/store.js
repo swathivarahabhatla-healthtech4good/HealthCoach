@@ -1,10 +1,14 @@
-/* Persistence: everything lives in localStorage under one key.
+/* Persistence: state lives in memory, cached in localStorage under one key.
+ * When published as a claude.ai artifact, js/cloud.js also syncs it to the
+ * viewer's private database space (see Store.onChange / Store.applyRemote).
  * Use Export / Import on the Trends tab to back up or move devices.
  */
 const STORE_KEY = "healthcoach.v1";
 
 const Store = (() => {
   let state = load();
+  const listeners = [];
+  const emit = (kind, key) => listeners.forEach((fn) => fn(kind, key));
 
   function blank() {
     return { days: {}, settings: { ...DEFAULT_SETTINGS }, favorites: [], prepDone: {} };
@@ -20,6 +24,7 @@ const Store = (() => {
         settings: { ...DEFAULT_SETTINGS, ...(s.settings || {}) },
         favorites: s.favorites || [],
         prepDone: s.prepDone || {},
+        metaT: s.metaT || 0,
       };
     } catch {
       return blank();
@@ -57,34 +62,61 @@ const Store = (() => {
   }
 
   function setDay(key, d) {
-    state.days[key] = d;
+    state.days[key] = { ...d, _t: Date.now() };
     save();
+    emit("day", key);
   }
+  function metaChanged() { state.metaT = Date.now(); save(); emit("meta"); }
 
   return {
     day,
     setDay,
     get settings() { return state.settings; },
-    setSettings(s) { state.settings = { ...state.settings, ...s }; save(); },
+    setSettings(s) { state.settings = { ...state.settings, ...s }; metaChanged(); },
     get favorites() { return state.favorites; },
     toggleFavorite(id) {
       const i = state.favorites.indexOf(id);
       if (i >= 0) state.favorites.splice(i, 1); else state.favorites.push(id);
-      save();
+      metaChanged();
     },
     prepDone(week) { return state.prepDone[week] || []; },
     togglePrep(week, id) {
       const cur = state.prepDone[week] || [];
       state.prepDone[week] = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
-      save();
+      metaChanged();
+    },
+    onChange(fn) { listeners.push(fn); },
+    rawDay(key) { return state.days[key]; },
+    allDays() { return state.days; },
+    meta() { return { settings: state.settings, favorites: state.favorites, prepDone: state.prepDone, metaT: state.metaT || 0 }; },
+    /** Merge data from the cloud; newer timestamps win. Returns keys that changed locally. */
+    applyRemote({ days = {}, meta = null }) {
+      let changed = false;
+      for (const [k, d] of Object.entries(days)) {
+        const local = state.days[k];
+        if (!local || (d._t || 0) > (local._t || 0)) { state.days[k] = d; changed = true; }
+      }
+      if (meta && (meta.metaT || 0) > (state.metaT || 0)) {
+        state.settings = { ...DEFAULT_SETTINGS, ...(meta.settings || {}) };
+        state.favorites = meta.favorites || [];
+        state.prepDone = meta.prepDone || {};
+        state.metaT = meta.metaT;
+        changed = true;
+      }
+      if (changed) save();
+      return changed;
     },
     dayKeys() { return Object.keys(state.days).sort(); },
     exportJSON() { return JSON.stringify(state, null, 2); },
     importJSON(text) {
       const s = JSON.parse(text);
       if (!s || typeof s.days !== "object") throw new Error("Not a Health Coach backup file");
-      state = { days: s.days, settings: { ...DEFAULT_SETTINGS, ...(s.settings || {}) }, favorites: s.favorites || [], prepDone: s.prepDone || {} };
+      const now = Date.now();
+      const days = Object.fromEntries(Object.entries(s.days).map(([k, d]) => [k, { ...d, _t: Math.max(d._t || 0, now) }]));
+      state = { days, settings: { ...DEFAULT_SETTINGS, ...(s.settings || {}) }, favorites: s.favorites || [], prepDone: s.prepDone || {}, metaT: now };
       save();
+      Object.keys(days).forEach((k) => emit("day", k));
+      emit("meta");
     },
   };
 })();
